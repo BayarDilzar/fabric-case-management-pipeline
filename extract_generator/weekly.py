@@ -5,6 +5,7 @@ from extract_generator.history import (
     INTERVENTION_TYPES,
     REVIEW_INTERVAL,
     draw_age,
+    first_scores,
     home_district,
     later_scores,
     review_row,
@@ -36,7 +37,6 @@ class Week:
     def __init__(self, state, rng, previous_cutoff, cutoff):
         self.state = state
         self.rng = rng
-        self.previous_cutoff = previous_cutoff
         self.cutoff = cutoff
         self.days = [previous_cutoff + timedelta(days=n) for n in range(1, (cutoff - previous_cutoff).days + 1)]
         self.touched = {table: set() for table in TABLES}
@@ -143,13 +143,13 @@ class Week:
 
     def new_review(self, episode_id, kind, day):
         reviews = self.children("reviews", episode_id)
+        scores = first_scores(self.rng)
         if reviews:
+            # An unanswered score carries nothing forward, so start that one afresh.
             last = reviews[-1]
-            days_used = last["days_used_last_28"] if last["days_used_last_28"] is not None else self.rng.randint(10, 28)
-            quality = last["quality_of_life"] if last["quality_of_life"] is not None else self.rng.randint(4, 12)
+            days_used = scores[0] if last["days_used_last_28"] is None else last["days_used_last_28"]
+            quality = scores[1] if last["quality_of_life"] is None else last["quality_of_life"]
             scores = later_scores(self.rng, days_used, quality)
-        else:
-            scores = (self.rng.randint(10, 28), self.rng.randint(4, 12))
         review = review_row(self.rng, kind, day, *scores)
         review_id = self.state.allocators["reviews"].new_id()
         review.update(review_id=review_id, episode_id=episode_id, last_modified_at=stamp(self.rng, day))
@@ -179,7 +179,6 @@ class Week:
                     self.change("interventions", intervention["intervention_id"], day, end_date=day)
             if reason in ("COMPLETED", "TRANSFERRED"):
                 self.exit_review(key, day)
-
 
     def end_interventions(self):
         pool = [
@@ -238,7 +237,6 @@ class Week:
             due = reviews[-1]["review_date"] + REVIEW_INTERVAL
             if due in self.days:
                 self.new_review(key, "REVIEW", due)
-
 
     def correct_clients(self):
         grouped = self.episodes_by_client()

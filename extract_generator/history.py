@@ -132,6 +132,10 @@ def review_row(rng, kind, day, days_used, quality):
     }
 
 
+def first_scores(rng):
+    return rng.randint(10, 28), rng.randint(4, 12)
+
+
 def later_scores(rng, days_used, quality):
     # Use tends to fall and quality of life to rise as treatment goes on.
     return max(0, days_used - rng.randint(0, 8)), min(20, quality + rng.randint(0, 4))
@@ -145,7 +149,7 @@ def new_reviews(rng, episode):
     first = start + timedelta(days=rng.randint(0, 14))
     if first > (closed or CUTOFF):
         return []
-    days_used, quality = rng.randint(10, 28), rng.randint(4, 12)
+    days_used, quality = first_scores(rng)
     rows = [review_row(rng, "START", first, days_used, quality)]
     day = first + REVIEW_INTERVAL
     while day <= CUTOFF and (closed is None or day < closed):
