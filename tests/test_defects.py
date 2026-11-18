@@ -190,3 +190,28 @@ def test_discharge_before_referral_only_hits_episodes_that_never_started_treatme
     lines = [line for line in defect_lines(out, HISTORY) if line["defect_type"] == "RULE_DISCHARGE_BEFORE_REFERRAL"]
 
     assert lines and {reason[line["record_key"]] for line in lines} == {"DECLINED"}
+
+
+WEEK_RULES = {
+    "2026-11-01": "RULE_DISCHARGE_BEFORE_REFERRAL",
+    "2026-11-08": "RULE_END_BEFORE_START",
+    "2026-11-15": "RULE_DAYS_RANGE",
+}
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_each_week_carries_the_spec_defect_counts_and_its_own_rule_break(seed, output_for):
+    out = output_for(seed)
+
+    for week, rule in WEEK_RULES.items():
+        counts = Counter(line["defect_type"] for line in defect_lines(out, week))
+        assert counts == {
+            "DUP_EXACT": 3,
+            "DUP_VERSION": 1,
+            "MISSING_REQUIRED": 1,
+            "DATE_FORMAT": 3,
+            "CODE_CASE": 2,
+            "CODE_UNKNOWN": 1,
+            "ORPHAN": 2,
+            rule: 1,
+        }

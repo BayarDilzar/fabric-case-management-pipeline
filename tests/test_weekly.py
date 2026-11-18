@@ -15,6 +15,7 @@ from tests.support import (
 
 SEEDS = [2026, 1, 7, 99, 12345]
 WEEKS = ["2026-11-01", "2026-11-08", "2026-11-15"]
+PREVIOUS = {"2026-11-01": "2026-10-25", "2026-11-08": "2026-11-01", "2026-11-15": "2026-11-08"}
 
 
 def end_of(day):
@@ -89,52 +90,45 @@ def test_source_keeps_every_rule_and_the_clean_shape_after_every_week(seed, buil
         assert check_shape(extract.snapshot, extract.cutoff) == []
 
 
-def test_each_week_brings_30_new_clients_and_40_new_episodes(built):
-    extracts, out = built(2026)
-    views = silver_by_date(out)
-    dates = extract_dates(out)
+def source_weeks(built):
+    """Pairs of source snapshots (before, after) for each week. Counts describe what the source did;
+    the file tests above prove the files carry it."""
+    extracts, _ = built(2026)
+    return [(extracts[n - 1].snapshot, extracts[n].snapshot) for n in range(1, 4)]
 
-    assert WEEKS == dates[1:4]
-    for week in WEEKS:
-        before = views[dates[dates.index(week) - 1]]
-        new_clients = {row["client_id"] for row in delivered_rows(out, week, "clients")} - set(before["clients"])
-        new_episodes = {row["episode_id"] for row in delivered_rows(out, week, "episodes")} - set(before["episodes"])
-        returning = {row["client_id"] for row in delivered_rows(out, week, "episodes") if row["episode_id"] in new_episodes}
+
+def filled(before, after, table, column):
+    return [row for key, row in after[table].items() if key in before[table] and not before[table][key][column] and row[column]]
+
+
+def created(before, after, table):
+    return [row for key, row in after[table].items() if key not in before[table]]
+
+
+def test_each_week_brings_30_new_clients_and_40_new_episodes(built):
+    for before, after in source_weeks(built):
+        new_clients = {row["client_id"] for row in created(before, after, "clients")}
+        new_episodes = created(before, after, "episodes")
+        returning = {row["client_id"] for row in new_episodes} - new_clients
         assert len(new_clients) == 30
         assert len(new_episodes) == 40
-        assert len(returning - new_clients) == 10
+        assert len(returning) == 10
 
 
-def changes(out, week, table, column):
-    """Rows of a table whose column was empty in Silver before the week and is filled by it."""
-    dates = extract_dates(out)
-    before = silver_by_date(out)[dates[dates.index(week) - 1]]
-    filled = []
-    for row in delivered_rows(out, week, table):
-        loaded = before[table].get(row[KEYS[table]])
-        if loaded is not None and not loaded[column] and row[column]:
-            filled.append(row)
-    return filled
-
-
-def test_each_week_triages_20_episodes_and_discharges_25(output_for):
-    out = output_for(2026)
-
-    for week in WEEKS:
-        discharged = changes(out, week, "episodes", "discharge_date")
-        assert len(changes(out, week, "episodes", "triage_date")) == 20
+def test_each_week_triages_20_episodes_and_discharges_25(built):
+    for (before, after), week in zip(source_weeks(built), WEEKS):
+        discharged = filled(before, after, "episodes", "discharge_date")
+        assert len(filled(before, after, "episodes", "triage_date")) == 20
         assert len(discharged) == 25
         assert "DECLINED" in {row["discharge_reason"] for row in discharged}
-        assert all(week >= row["discharge_date"] > extract_dates(out)[extract_dates(out).index(week) - 1] for row in discharged)
+        assert all(PREVIOUS[week] < row["discharge_date"] <= week for row in discharged)
 
 
-def test_discharges_bring_exit_reviews_and_end_open_interventions_on_the_same_day(output_for):
-    out = output_for(2026)
-
-    for week in WEEKS:
-        discharged = {row["episode_id"]: row for row in changes(out, week, "episodes", "discharge_date")}
-        ended = [row for row in changes(out, week, "interventions", "end_date") if row["episode_id"] in discharged]
-        exits = [row for row in new_rows(out, week, "reviews") if row["review_type"] == "EXIT"]
+def test_discharges_bring_exit_reviews_and_end_open_interventions_on_the_same_day(built):
+    for before, after in source_weeks(built):
+        discharged = {row["episode_id"]: row for row in filled(before, after, "episodes", "discharge_date")}
+        ended = [row for row in filled(before, after, "interventions", "end_date") if row["episode_id"] in discharged]
+        exits = [row for row in created(before, after, "reviews") if row["review_type"] == "EXIT"]
         assert ended and exits
         for row in ended:
             assert row["end_date"] == discharged[row["episode_id"]]["discharge_date"]
@@ -156,50 +150,30 @@ def test_quarantined_rows_never_reappear_in_a_later_extract(seed, output_for):
                 assert key not in keys, (later, key)
 
 
-def new_rows(out, week, table):
-    dates = extract_dates(out)
-    before = silver_by_date(out)[dates[dates.index(week) - 1]]
-    return [row for row in delivered_rows(out, week, table) if row[KEYS[table]] not in before[table]]
+def test_each_week_ends_40_interventions_and_adds_60_interventions_and_100_reviews(built):
+    for before, after in source_weeks(built):
+        assert len(filled(before, after, "interventions", "end_date")) == 40
+        assert len(created(before, after, "interventions")) == 60
+        assert len(created(before, after, "reviews")) == 100
 
 
-def test_each_week_ends_40_interventions_and_adds_60_interventions_and_100_reviews(output_for):
-    out = output_for(2026)
-
-    for week in WEEKS:
-        assert len(changes(out, week, "interventions", "end_date")) == 40
-        assert len(new_rows(out, week, "interventions")) == 60
-        assert len(new_rows(out, week, "reviews")) == 100
-
-
-def test_first_treatment_in_a_week_comes_with_its_start_review(output_for):
-    out = output_for(2026)
-    dates = extract_dates(out)
-
-    for week in WEEKS:
-        before = silver_by_date(out)[dates[dates.index(week) - 1]]
+def test_first_treatment_in_a_week_comes_with_its_start_review(built):
+    for before, after in source_weeks(built):
         treated_before = {row["episode_id"] for row in before["interventions"].values()}
-        starters = {row["episode_id"] for row in new_rows(out, week, "interventions")} - treated_before
-        starts = {row["episode_id"] for row in new_rows(out, week, "reviews") if row["review_type"] == "START"}
+        starters = {row["episode_id"] for row in created(before, after, "interventions")} - treated_before
+        starts = {row["episode_id"] for row in created(before, after, "reviews") if row["review_type"] == "START"}
         assert starters
-        assert starts <= starters
+        assert starts == starters
 
 
-def changed_rows(out, week, table):
-    dates = extract_dates(out)
-    before = silver_by_date(out)[dates[dates.index(week) - 1]]
-    return [
-        (before[table][row[KEYS[table]]], row)
-        for row in delivered_rows(out, week, table)
-        if row[KEYS[table]] in before[table]
-    ]
-
-
-def test_each_week_corrects_5_clients_and_3_review_scores(output_for):
-    out = output_for(2026)
-
-    for week in WEEKS:
-        clients = changed_rows(out, week, "clients")
-        reviews = changed_rows(out, week, "reviews")
+def test_each_week_corrects_5_clients_and_3_review_scores(built):
+    for before, after in source_weeks(built):
+        clients = [(before["clients"][k], row) for k, row in after["clients"].items() if k in before["clients"] and before["clients"][k] != row]
+        reviews = [
+            (before["reviews"][k], row)
+            for k, row in after["reviews"].items()
+            if k in before["reviews"] and before["reviews"][k] != row
+        ]
         assert len(clients) == 5
         for old, new in clients:
             assert (old["sex"] == "U" and new["sex"] in ("F", "M")) or old["local_authority_code"] != new["local_authority_code"]

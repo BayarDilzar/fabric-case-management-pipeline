@@ -49,6 +49,50 @@ HISTORY_PLAN = [
 UNKNOWN_CODES = {"primary_substance": "HEROIN", "intervention_type": "PHARMACY", "service_code": "S07"}
 # UK day-first order and the NDTMS compact format. Never month-first, which cannot be told apart.
 OTHER_DATE_FORMATS = ["%d/%m/%Y", "%Y%m%d"]
+WEEK_TARGETS = {
+    "MISSING_REQUIRED": [("episodes", "referral_date"), ("interventions", "start_date"), ("reviews", "review_date")],
+    "DATE_FORMAT": [
+        ("episodes", "referral_date"),
+        ("episodes", "discharge_date"),
+        ("interventions", "start_date"),
+        ("reviews", "review_date"),
+    ],
+    "CODE_CASE": [("clients", "sex"), ("episodes", "referral_source"), ("interventions", "intervention_type")],
+    "CODE_UNKNOWN": [("episodes", "primary_substance"), ("episodes", "service_code"), ("interventions", "intervention_type")],
+    "ORPHAN": [("episodes", "client_id"), ("interventions", "episode_id"), ("reviews", "episode_id")],
+}
+WEEK_RULES = [
+    ("RULE_DISCHARGE_BEFORE_REFERRAL", "episodes", "discharge_date"),
+    ("RULE_END_BEFORE_START", "interventions", "end_date"),
+    ("RULE_DAYS_RANGE", "reviews", "days_used_last_28"),
+]
+
+
+def week_plan(number):
+    """About 14 defects a week. Targets rotate by week so three weeks cover every field."""
+    turn = number - 1
+
+    def one(defect_type):
+        targets = WEEK_TARGETS[defect_type]
+        return [(defect_type, *targets[turn % len(targets)], 1)]
+
+    def all_but_one(defect_type):
+        targets = WEEK_TARGETS[defect_type]
+        skipped = targets[turn % len(targets)]
+        return [(defect_type, table, field, 1) for table, field in targets if (table, field) != skipped]
+
+    return (
+        [("DUP_EXACT", table, "", 1) for table in ("episodes", "interventions", "reviews")]
+        + [("DUP_VERSION", "episodes", "", 1)]
+        + one("MISSING_REQUIRED")
+        + all_but_one("DATE_FORMAT")
+        + all_but_one("CODE_CASE")
+        + one("CODE_UNKNOWN")
+        + all_but_one("ORPHAN")
+        + [(*WEEK_RULES[turn], 1)]
+    )
+
+
 # The fields an older version did not have yet.
 LATER_FIELDS = {"episodes": ["discharge_date", "discharge_reason"], "interventions": ["end_date"]}
 TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -57,9 +101,10 @@ TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 class Injector:
     """Adds defects to one extract's rendered rows and records each one for the manifest."""
 
-    def __init__(self, extract, rng, state, new_keys):
+    def __init__(self, extract, rng, state, new_keys, weekly):
         self.files = extract.files
         self.new_keys = new_keys
+        self.weekly = weekly
         self.state = state
         # Episodes that have interventions or reviews in the source system, loaded or not.
         self.parents = {row["episode_id"] for name in ("interventions", "reviews") for row in state.table(name).values()}
@@ -100,7 +145,9 @@ class Injector:
             return row["discharge_reason"] == "DECLINED" and key not in self.parents
         if defect_type == "RULE_END_BEFORE_START":
             # Room between referral and start keeps the bad end date inside the episode, so only R08 breaks.
-            return bool(row["end_date"]) and self.days_after_referral(row) >= 1
+            # In a week the episode must still be open: Silver keeps the open version of the intervention.
+            still_open = not self.weekly or self.state.episodes[row["episode_id"]]["discharge_date"] is None
+            return bool(row["end_date"]) and self.days_after_referral(row) >= 1 and still_open
         if defect_type == "DUP_VERSION":
             if table == "episodes":
                 # The older version is stamped an hour earlier, so it must still fall after its last date.
@@ -205,5 +252,5 @@ class Injector:
             rows.insert(position if self.rng.random() < 0.5 else position + 1, row)
 
 
-def inject(extract, rng, plan, state, new_keys):
-    return Injector(extract, rng, state, new_keys).run(plan)
+def inject(extract, rng, plan, state, new_keys, weekly=False):
+    return Injector(extract, rng, state, new_keys, weekly).run(plan)
