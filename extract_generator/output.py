@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from extract_generator.csvfile import sha256_of, write_csv
+from extract_generator.defects import DEFECT_COLUMNS
 from extract_generator.reference import CODE_LISTS, CUTOFFS, SERVICES
 
 FILES_COLUMNS = ["extract_date", "seed", "file_name", "row_count", "sha256"]
@@ -42,3 +43,4 @@ def write_all(extracts, seed, out_dir):
         for name, rows in extract.files.items():
             write_counted(folder, name, extract.columns[name], rows, extract_date, seed, listing)
         write_csv(out / "manifests" / extract_date / "files.csv", FILES_COLUMNS, listing)
+        write_csv(out / "manifests" / extract_date / "defects.csv", DEFECT_COLUMNS, extract.defects)

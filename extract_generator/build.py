@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from random import Random
 
+from extract_generator.defects import HISTORY_PLAN, inject
 from extract_generator.history import build_history
 from extract_generator.reference import COLUMNS, CUTOFFS
 from extract_generator.state import TABLES, snapshot
@@ -22,8 +23,11 @@ def extract_rng(seed, number):
 
 
 def build(seed):
-    state = build_history(extract_rng(seed, 0))
+    rng = extract_rng(seed, 0)
+    state = build_history(rng)
     view = snapshot(state)
     files = {f"{table}.csv": [dict(row) for row in view[table].values()] for table in TABLES}
     columns = {f"{table}.csv": COLUMNS[table] for table in TABLES}
-    return [Extract(CUTOFFS[0], columns, files, [], view)]
+    history = Extract(CUTOFFS[0], columns, files, [], view)
+    history.defects = inject(history, rng, HISTORY_PLAN)
+    return [history]

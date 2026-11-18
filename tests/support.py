@@ -65,15 +65,6 @@ def read_csv(path):
     return header, rows
 
 
-def read_view(folder):
-    """Rows of one extract folder keyed by id, for extracts without defects."""
-    view = {}
-    for table in TABLES:
-        _, rows = read_csv(folder / f"{table}.csv")
-        view[table] = {row[KEYS[table]]: row for row in rows}
-    return view
-
-
 def as_date(value):
     return date.fromisoformat(value) if value else None
 
@@ -312,3 +303,93 @@ RULES = [
 
 def check_rules(view, cutoff):
     return [problem for rule in RULES for problem in rule(view, cutoff)]
+
+
+DEFECT_COLUMNS = [
+    "defect_id",
+    "extract_date",
+    "file_name",
+    "record_key",
+    "field",
+    "defect_type",
+    "injected_value",
+    "expected_outcome",
+    "expected_value",
+    "expected_reason",
+]
+
+
+def extract_dates(out):
+    return sorted(path.name for path in (out / "extracts").iterdir())
+
+
+def defect_lines(out, extract_date):
+    header, rows = read_csv(out / "manifests" / extract_date / "defects.csv")
+    assert header == DEFECT_COLUMNS
+    return rows
+
+
+def listed_defects(out, extract_date):
+    return {
+        (line["file_name"], line["record_key"], line["field"], line["defect_type"], line["injected_value"])
+        for line in defect_lines(out, extract_date)
+    }
+
+
+def detect_duplicates(file_name, key_column, rows):
+    found = set()
+    grouped = defaultdict(list)
+    for row in rows:
+        grouped[row[key_column]].append(row)
+    for key, group in grouped.items():
+        if len(group) == 1:
+            continue
+        if len(group) == 2 and group[0] == group[1]:
+            found.add((file_name, key, "", "DUP_EXACT", ""))
+        elif len(group) == 2:
+            older = min(row["last_modified_at"] for row in group)
+            found.add((file_name, key, "", "DUP_VERSION", older))
+        else:
+            found.add((file_name, key, "", "UNEXPECTED_DUPLICATES", str(len(group))))
+    return found
+
+
+def detect_defects(out, extract_date):
+    """Find defects in one extract's files using only the spec's checks, not the manifest."""
+    found = set()
+    folder = out / "extracts" / extract_date
+    for table in TABLES:
+        file_name = f"{table}.csv"
+        _, rows = read_csv(folder / file_name)
+        found |= detect_duplicates(file_name, KEYS[table], rows)
+    return found
+
+
+def load_extract(out, extract_date, previous):
+    """Apply one extract to a copy of the Silver view, doing what the manifest says Silver should do."""
+    view = {table: dict(previous.get(table, {})) for table in TABLES}
+    lines = defect_lines(out, extract_date)
+    for table in TABLES:
+        file_name = f"{table}.csv"
+        _, rows = read_csv(out / "extracts" / extract_date / file_name)
+        listed = [line for line in lines if line["file_name"] == file_name]
+        for line in listed:
+            matches = [i for i, row in enumerate(rows) if row[KEYS[table]] == line["record_key"]]
+            if line["defect_type"] == "DUP_EXACT":
+                assert len(matches) == 2 and rows[matches[0]] == rows[matches[1]], line
+                del rows[matches[1]]
+        for row in rows:
+            key = row[KEYS[table]]
+            loaded = view[table].get(key)
+            if loaded is None or row["last_modified_at"] > loaded["last_modified_at"]:
+                view[table][key] = row
+            else:
+                assert row == loaded, f"{key}: same or older timestamp but different content"
+    return view
+
+
+def silver_views(out):
+    view = {}
+    for extract_date in extract_dates(out):
+        view = load_extract(out, extract_date, view)
+        yield date.fromisoformat(extract_date), view
