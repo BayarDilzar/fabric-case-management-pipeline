@@ -40,7 +40,7 @@ def write_all(extracts, seed, out_dir):
         extract_date = extract.cutoff.isoformat()
         folder = out / "extracts" / extract_date
         listing = []
-        for name, rows in extract.files.items():
-            write_counted(folder, name, extract.columns[name], rows, extract_date, seed, listing)
+        for name in sorted(extract.files):
+            write_counted(folder, name, extract.columns[name], extract.files[name], extract_date, seed, listing)
         write_csv(out / "manifests" / extract_date / "files.csv", FILES_COLUMNS, listing)
         write_csv(out / "manifests" / extract_date / "defects.csv", DEFECT_COLUMNS, extract.defects)

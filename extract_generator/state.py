@@ -50,8 +50,4 @@ def render(table, row):
 
 
 def snapshot(state):
-    return {
-        table: {key: render(table, rows[key]) for key in sorted(rows)}
-        for table in TABLES
-        for rows in [state.table(table)]
-    }
+    return {table: {key: render(table, row) for key, row in sorted(state.table(table).items())} for table in TABLES}

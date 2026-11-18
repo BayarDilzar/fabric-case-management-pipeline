@@ -41,7 +41,7 @@ def build(seed):
     rng = extract_rng(seed, 0)
     state = build_history(rng)
     view = snapshot(state)
-    files = {f"{table}.csv": [dict(row) for row in view[table].values()] for table in TABLES}
+    files = {f"{table}.csv": [dict(view[table][key]) for key in sorted(view[table])] for table in TABLES}
     columns = {f"{table}.csv": COLUMNS[table] for table in TABLES}
     history = Extract(CUTOFFS[0], columns, files, [], view)
     every_key = {table: set(state.table(table)) for table in TABLES}
