@@ -25,6 +25,10 @@ CATALOGUE = {
     "CODE_CASE": ("CORRECTED", ""),
     "CODE_UNKNOWN": ("QUARANTINED", "INVALID_CODE"),
     "ORPHAN": ("QUARANTINED", "ORPHAN"),
+    "RULE_DISCHARGE_BEFORE_REFERRAL": ("QUARANTINED", "RULE_R07"),
+    "RULE_END_BEFORE_START": ("QUARANTINED", "RULE_R08"),
+    "RULE_DAYS_RANGE": ("QUARANTINED", "RULE_R09"),
+    "RULE_FUTURE_DATE": ("QUARANTINED", "RULE_R10"),
 }
 HISTORY_COUNTS = {
     ("DUP_EXACT", "clients.csv", ""): 20,
@@ -49,6 +53,10 @@ HISTORY_COUNTS = {
     ("ORPHAN", "episodes.csv", "client_id"): 6,
     ("ORPHAN", "interventions.csv", "episode_id"): 12,
     ("ORPHAN", "reviews.csv", "episode_id"): 15,
+    ("RULE_DISCHARGE_BEFORE_REFERRAL", "episodes.csv", "discharge_date"): 6,
+    ("RULE_END_BEFORE_START", "interventions.csv", "end_date"): 8,
+    ("RULE_DAYS_RANGE", "reviews.csv", "days_used_last_28"): 7,
+    ("RULE_FUTURE_DATE", "reviews.csv", "review_date"): 5,
 }
 
 
@@ -172,3 +180,13 @@ def test_orphan_parents_look_like_normal_ids_and_never_appear_in_any_extract(see
         assert line["injected_value"][0] == {"clients": "C", "episodes": "E"}[parent_table]
         assert len(line["injected_value"]) == 7 and line["injected_value"][1:].isdigit()
         assert line["injected_value"] not in issued[parent_table]
+
+
+def test_discharge_before_referral_only_hits_episodes_that_never_started_treatment(output_for):
+    out = output_for(2026)
+    _, episodes = read_csv(out / "extracts" / HISTORY / "episodes.csv")
+    reason = {row["episode_id"]: row["discharge_reason"] for row in episodes}
+
+    lines = [line for line in defect_lines(out, HISTORY) if line["defect_type"] == "RULE_DISCHARGE_BEFORE_REFERRAL"]
+
+    assert lines and {reason[line["record_key"]] for line in lines} == {"DECLINED"}

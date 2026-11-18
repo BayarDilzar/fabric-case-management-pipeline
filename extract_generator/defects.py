@@ -40,6 +40,10 @@ HISTORY_PLAN = [
     ("ORPHAN", "episodes", "client_id", 6),
     ("ORPHAN", "interventions", "episode_id", 12),
     ("ORPHAN", "reviews", "episode_id", 15),
+    ("RULE_DISCHARGE_BEFORE_REFERRAL", "episodes", "discharge_date", 6),
+    ("RULE_END_BEFORE_START", "interventions", "end_date", 8),
+    ("RULE_DAYS_RANGE", "reviews", "days_used_last_28", 7),
+    ("RULE_FUTURE_DATE", "reviews", "review_date", 5),
 ]
 # Believable mistakes: a drug name typed as a code, a near-miss code, a service that does not exist.
 UNKNOWN_CODES = {"primary_substance": "HEROIN", "intervention_type": "PHARMACY", "service_code": "S07"}
@@ -89,8 +93,14 @@ class Injector:
         key = row[KEYS[table]]
         if defect_type == "DATE_FORMAT":
             return bool(row[field])
-        if defect_type in ("MISSING_REQUIRED", "CODE_UNKNOWN", "ORPHAN"):
+        if defect_type in ("MISSING_REQUIRED", "CODE_UNKNOWN", "ORPHAN", "RULE_DAYS_RANGE", "RULE_FUTURE_DATE"):
             return self.rejectable(table, key)
+        if defect_type == "RULE_DISCHARGE_BEFORE_REFERRAL":
+            # Only an episode that never started treatment can be closed and have no children.
+            return row["discharge_reason"] == "DECLINED" and key not in self.parents
+        if defect_type == "RULE_END_BEFORE_START":
+            # Room between referral and start keeps the bad end date inside the episode, so only R08 breaks.
+            return bool(row["end_date"]) and self.days_after_referral(row) >= 1
         if defect_type == "DUP_VERSION":
             if table == "episodes":
                 # The older version is stamped an hour earlier, so it must still fall after its last date.
@@ -98,6 +108,10 @@ class Injector:
                 return bool(row["discharge_date"]) and row["discharge_date"] > earlier
             return bool(row["end_date"]) and row["end_date"] > row["start_date"]
         return True
+
+    def days_after_referral(self, intervention):
+        episode = self.state.episodes[intervention["episode_id"]]
+        return (date.fromisoformat(intervention["start_date"]) - episode["referral_date"]).days
 
     def record(self, table, key, field, defect_type, injected, outcome, expected="", reason=""):
         number = len(self.lines) + 1
@@ -156,6 +170,29 @@ class Injector:
         missing = self.rng.choice(self.state.allocators[parent].held_back)
         self.rows[table][key][field] = missing
         self.record(table, key, field, "ORPHAN", missing, "QUARANTINED", reason="ORPHAN")
+
+    def shift(self, table, key, field, base, days, defect_type, reason):
+        row = self.rows[table][key]
+        row[field] = (date.fromisoformat(base) + timedelta(days=days)).isoformat()
+        self.record(table, key, field, defect_type, row[field], "QUARANTINED", reason=reason)
+
+    def rule_discharge_before_referral(self, table, field, key):
+        referral = self.rows[table][key]["referral_date"]
+        self.shift(table, key, field, referral, -self.rng.randint(1, 60), "RULE_DISCHARGE_BEFORE_REFERRAL", "RULE_R07")
+
+    def rule_end_before_start(self, table, field, key):
+        row = self.rows[table][key]
+        days = self.rng.randint(1, min(30, self.days_after_referral(row)))
+        self.shift(table, key, field, row["start_date"], -days, "RULE_END_BEFORE_START", "RULE_R08")
+
+    def rule_days_range(self, table, field, key):
+        value = str(self.rng.randint(29, 40))
+        self.rows[table][key][field] = value
+        self.record(table, key, field, "RULE_DAYS_RANGE", value, "QUARANTINED", reason="RULE_R09")
+
+    def rule_future_date(self, table, field, key):
+        cutoff = self.cutoff.isoformat()
+        self.shift(table, key, field, cutoff, self.rng.randint(1, 90), "RULE_FUTURE_DATE", "RULE_R10")
 
     def place_inserts(self):
         for table, row, anchor in self.inserts:

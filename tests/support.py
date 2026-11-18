@@ -359,6 +359,27 @@ def detect_duplicates(file_name, key_column, rows):
     return found
 
 
+def iso(row, column):
+    return as_date(row[column]) if ISO_DATE.fullmatch(row[column]) else None
+
+
+def detect_rule_breaks(table, row, cutoff):
+    file_name, key = f"{table}.csv", row[KEYS[table]]
+    if table == "episodes" and iso(row, "discharge_date") and iso(row, "referral_date"):
+        if iso(row, "discharge_date") < iso(row, "referral_date"):
+            yield (file_name, key, "discharge_date", "RULE_DISCHARGE_BEFORE_REFERRAL", row["discharge_date"])
+    if table == "interventions" and iso(row, "end_date") and iso(row, "start_date"):
+        if iso(row, "end_date") < iso(row, "start_date"):
+            yield (file_name, key, "end_date", "RULE_END_BEFORE_START", row["end_date"])
+    if table == "reviews":
+        for column, top in (("days_used_last_28", 28), ("quality_of_life", 20)):
+            if row[column] and not 0 <= int(row[column]) <= top:
+                yield (file_name, key, column, "RULE_DAYS_RANGE" if top == 28 else "RULE_QUALITY_RANGE", row[column])
+    for column in DATE_FIELDS[table]:
+        if iso(row, column) and iso(row, column) > cutoff:
+            yield (file_name, key, column, "RULE_FUTURE_DATE", row[column])
+
+
 def detect_row_defects(table, row):
     file_name, key = f"{table}.csv", row[KEYS[table]]
     for column in REQUIRED[table]:
@@ -401,6 +422,7 @@ def detect_defects(out, extract_date):
         parent_keys = keys_so_far(out, extract_date, parent[1]) if parent else set()
         for row in rows:
             found |= set(detect_row_defects(table, row))
+            found |= set(detect_rule_breaks(table, row, date.fromisoformat(extract_date)))
             if parent and row[parent[0]] not in parent_keys:
                 found.add((file_name, row[KEYS[table]], parent[0], "ORPHAN", row[parent[0]]))
     return found
