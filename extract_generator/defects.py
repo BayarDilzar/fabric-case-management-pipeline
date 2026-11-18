@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from extract_generator.reference import KEYS
 from extract_generator.state import TABLES
 
@@ -20,7 +22,12 @@ HISTORY_PLAN = [
     ("DUP_EXACT", "episodes", "", 15),
     ("DUP_EXACT", "interventions", "", 25),
     ("DUP_EXACT", "reviews", "", 30),
+    ("DUP_VERSION", "episodes", "", 10),
+    ("DUP_VERSION", "interventions", "", 10),
 ]
+# The fields an older version did not have yet.
+LATER_FIELDS = {"episodes": ["discharge_date", "discharge_reason"], "interventions": ["end_date"]}
+TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 
 class Injector:
@@ -37,13 +44,26 @@ class Injector:
 
     def run(self, plan):
         for defect_type, table, field, count in plan:
-            pool = [key for key in sorted(self.rows[table]) if key not in self.used[table]]
+            pool = [
+                key
+                for key in sorted(self.rows[table])
+                if key not in self.used[table] and self.eligible(defect_type, table, self.rows[table][key])
+            ]
             for key in self.rng.sample(pool, min(count, len(pool))):
                 # One defect per row, so a test can tell which check should catch it.
                 self.used[table].add(key)
                 getattr(self, defect_type.lower())(table, field, key)
         self.place_inserts()
         return self.lines
+
+    def eligible(self, defect_type, table, row):
+        if defect_type == "DUP_VERSION":
+            if table == "episodes":
+                # The older version is stamped an hour earlier, so it must still fall after its last date.
+                earlier = max(value for value in (row["referral_date"], row["triage_date"]) if value)
+                return bool(row["discharge_date"]) and row["discharge_date"] > earlier
+            return bool(row["end_date"]) and row["end_date"] > row["start_date"]
+        return True
 
     def record(self, table, key, field, defect_type, injected, outcome, expected="", reason=""):
         number = len(self.lines) + 1
@@ -63,13 +83,28 @@ class Injector:
         )
 
     def dup_exact(self, table, field, key):
-        self.inserts.append((table, dict(self.rows[table][key])))
+        self.inserts.append((table, dict(self.rows[table][key]), None))
         self.record(table, key, "", "DUP_EXACT", "", "REMOVED")
 
+    def dup_version(self, table, field, key):
+        newer = self.rows[table][key]
+        older = dict(newer)
+        for column in LATER_FIELDS[table]:
+            older[column] = ""
+        stamp = datetime.strptime(newer["last_modified_at"], TIMESTAMP_FORMAT) - timedelta(hours=1)
+        older["last_modified_at"] = stamp.strftime(TIMESTAMP_FORMAT)
+        self.inserts.append((table, older, newer))
+        self.record(table, key, "", "DUP_VERSION", older["last_modified_at"], "REMOVED")
+
     def place_inserts(self):
-        for table, row in self.inserts:
+        for table, row, anchor in self.inserts:
             rows = self.files[f"{table}.csv"]
-            rows.insert(self.rng.randint(0, len(rows)), row)
+            if anchor is None:
+                rows.insert(self.rng.randint(0, len(rows)), row)
+                continue
+            # Before or after at random, so file order cannot tell old from new.
+            position = next(i for i, candidate in enumerate(rows) if candidate is anchor)
+            rows.insert(position if self.rng.random() < 0.5 else position + 1, row)
 
 
 def inject(extract, rng, plan):

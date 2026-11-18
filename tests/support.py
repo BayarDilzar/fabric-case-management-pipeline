@@ -378,6 +378,11 @@ def load_extract(out, extract_date, previous):
             if line["defect_type"] == "DUP_EXACT":
                 assert len(matches) == 2 and rows[matches[0]] == rows[matches[1]], line
                 del rows[matches[1]]
+            elif line["defect_type"] == "DUP_VERSION":
+                older = [i for i in matches if rows[i]["last_modified_at"] == line["injected_value"]]
+                newer = [i for i in matches if rows[i]["last_modified_at"] > line["injected_value"]]
+                assert len(matches) == 2 and len(older) == 1 and len(newer) == 1, line
+                del rows[older[0]]
         for row in rows:
             key = row[KEYS[table]]
             loaded = view[table].get(key)

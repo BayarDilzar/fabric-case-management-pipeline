@@ -2,18 +2,30 @@ from collections import Counter
 
 import pytest
 
-from tests.support import check_rules, defect_lines, detect_defects, extract_dates, listed_defects, silver_views
+from tests.support import (
+    KEYS,
+    check_rules,
+    defect_lines,
+    detect_defects,
+    extract_dates,
+    listed_defects,
+    read_csv,
+    silver_views,
+)
 
 SEEDS = [2026, 1, 7, 99, 12345]
 HISTORY = "2026-10-25"
 CATALOGUE = {
     "DUP_EXACT": ("REMOVED", ""),
+    "DUP_VERSION": ("REMOVED", ""),
 }
 HISTORY_COUNTS = {
     ("DUP_EXACT", "clients.csv", ""): 20,
     ("DUP_EXACT", "episodes.csv", ""): 15,
     ("DUP_EXACT", "interventions.csv", ""): 25,
     ("DUP_EXACT", "reviews.csv", ""): 30,
+    ("DUP_VERSION", "episodes.csv", ""): 10,
+    ("DUP_VERSION", "interventions.csv", ""): 10,
 }
 
 
@@ -51,3 +63,19 @@ def test_each_defect_has_the_catalogue_outcome_and_hits_its_own_row(seed, output
             assert line["defect_id"] == f"D-{extract_date.replace('-', '')}-{number:04d}"
             assert line["extract_date"] == extract_date
             assert (line["expected_outcome"], line["expected_reason"]) == CATALOGUE[line["defect_type"]]
+
+
+def test_older_versions_sit_next_to_the_newer_row_on_either_side(output_for):
+    out = output_for(2026)
+    sides = Counter()
+
+    for line in defect_lines(out, HISTORY):
+        if line["defect_type"] != "DUP_VERSION":
+            continue
+        table = line["file_name"][: -len(".csv")]
+        _, rows = read_csv(out / "extracts" / HISTORY / line["file_name"])
+        first, second = [i for i, row in enumerate(rows) if row[KEYS[table]] == line["record_key"]]
+        assert second == first + 1
+        sides["before" if rows[first]["last_modified_at"] == line["injected_value"] else "after"] += 1
+
+    assert sides["before"] and sides["after"]
