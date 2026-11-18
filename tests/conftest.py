@@ -12,7 +12,7 @@ def output_for(tmp_path_factory):
     def output(seed):
         if seed not in written:
             folder = tmp_path_factory.mktemp(f"seed{seed}")
-            write_all(build(seed), folder)
+            write_all(build(seed), seed, folder)
             written[seed] = folder
         return written[seed]
 

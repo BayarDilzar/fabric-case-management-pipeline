@@ -1,4 +1,5 @@
 import csv
+import hashlib
 from pathlib import Path
 
 
@@ -11,3 +12,7 @@ def write_csv(path, columns, rows):
         writer.writerow(columns)
         for row in rows:
             writer.writerow([row[column] for column in columns])
+
+
+def sha256_of(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()

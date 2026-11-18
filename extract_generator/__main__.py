@@ -9,7 +9,7 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=2026)
     parser.add_argument("--out", default="output")
     args = parser.parse_args(argv)
-    write_all(build(args.seed), args.out)
+    write_all(build(args.seed), args.seed, args.out)
 
 
 if __name__ == "__main__":
