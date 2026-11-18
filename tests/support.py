@@ -1,5 +1,6 @@
 """Test helpers. Expected values come from the spec, not from the generator."""
 
+import csv
 import re
 from collections import defaultdict
 from datetime import date, datetime, time
@@ -51,8 +52,26 @@ DATE_FIELDS = {
     "reviews": ["review_date"],
 }
 TABLES = ("clients", "episodes", "interventions", "reviews")
+KEYS = {"clients": "client_id", "episodes": "episode_id", "interventions": "intervention_id", "reviews": "review_id"}
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
+
+
+def read_csv(path):
+    with open(path, encoding="utf-8", newline="") as handle:
+        reader = csv.reader(handle)
+        header = next(reader)
+        rows = [dict(zip(header, values)) for values in reader]
+    return header, rows
+
+
+def read_view(folder):
+    """Rows of one extract folder keyed by id, for extracts without defects."""
+    view = {}
+    for table in TABLES:
+        _, rows = read_csv(folder / f"{table}.csv")
+        view[table] = {row[KEYS[table]]: row for row in rows}
+    return view
 
 
 def as_date(value):
