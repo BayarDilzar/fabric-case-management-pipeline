@@ -10,7 +10,7 @@ from tests.support import (
     defect_lines,
     extract_dates,
     read_csv,
-    silver_views,
+    silver_by_date,
 )
 
 SEEDS = [2026, 1, 7, 99, 12345]
@@ -50,7 +50,7 @@ def quarantined_keys(out, upto):
 @pytest.mark.parametrize("seed", SEEDS)
 def test_weekly_extracts_hold_only_new_or_changed_rows_stamped_inside_their_week(seed, output_for):
     out = output_for(seed)
-    views = dict((cutoff.isoformat(), view) for cutoff, view in silver_views(out))
+    views = silver_by_date(out)
     dates = extract_dates(out)
 
     for week in WEEKS:
@@ -66,7 +66,7 @@ def test_weekly_extracts_hold_only_new_or_changed_rows_stamped_inside_their_week
 @pytest.mark.parametrize("seed", SEEDS)
 def test_silver_rebuilt_from_the_files_matches_the_source_after_every_week(seed, built):
     extracts, out = built(seed)
-    views = dict((cutoff.isoformat(), view) for cutoff, view in silver_views(out))
+    views = silver_by_date(out)
 
     for extract in extracts:
         extract_date = extract.cutoff.isoformat()
@@ -91,7 +91,7 @@ def test_source_keeps_every_rule_and_the_clean_shape_after_every_week(seed, buil
 
 def test_each_week_brings_30_new_clients_and_40_new_episodes(built):
     extracts, out = built(2026)
-    views = dict((cutoff.isoformat(), view) for cutoff, view in silver_views(out))
+    views = silver_by_date(out)
     dates = extract_dates(out)
 
     assert WEEKS == dates[1:4]
@@ -103,3 +103,54 @@ def test_each_week_brings_30_new_clients_and_40_new_episodes(built):
         assert len(new_clients) == 30
         assert len(new_episodes) == 40
         assert len(returning - new_clients) == 10
+
+
+def changes(out, week, table, column):
+    """Rows of a table whose column was empty in Silver before the week and is filled by it."""
+    dates = extract_dates(out)
+    before = silver_by_date(out)[dates[dates.index(week) - 1]]
+    filled = []
+    for row in delivered_rows(out, week, table):
+        loaded = before[table].get(row[KEYS[table]])
+        if loaded is not None and not loaded[column] and row[column]:
+            filled.append(row)
+    return filled
+
+
+def test_each_week_triages_20_episodes_and_discharges_25(output_for):
+    out = output_for(2026)
+
+    for week in WEEKS:
+        discharged = changes(out, week, "episodes", "discharge_date")
+        assert len(changes(out, week, "episodes", "triage_date")) == 20
+        assert len(discharged) == 25
+        assert "DECLINED" in {row["discharge_reason"] for row in discharged}
+        assert all(week >= row["discharge_date"] > extract_dates(out)[extract_dates(out).index(week) - 1] for row in discharged)
+
+
+def test_discharges_bring_exit_reviews_and_end_open_interventions_on_the_same_day(output_for):
+    out = output_for(2026)
+
+    for week in WEEKS:
+        discharged = {row["episode_id"]: row for row in changes(out, week, "episodes", "discharge_date")}
+        ended = [row for row in changes(out, week, "interventions", "end_date") if row["episode_id"] in discharged]
+        exits = [row for row in delivered_rows(out, week, "reviews") if row["review_type"] == "EXIT"]
+        assert ended and exits
+        for row in ended:
+            assert row["end_date"] == discharged[row["episode_id"]]["discharge_date"]
+        for row in exits:
+            assert discharged[row["episode_id"]]["discharge_reason"] in ("COMPLETED", "TRANSFERRED")
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_quarantined_rows_never_reappear_in_a_later_extract(seed, output_for):
+    out = output_for(seed)
+    dates = extract_dates(out)
+
+    for index, extract_date in enumerate(dates):
+        rejected = quarantined_keys(out, extract_date) - quarantined_keys(out, dates[index - 1] if index else "")
+        for later in dates[index + 1 :]:
+            for file_name, key in rejected:
+                table = file_name[: -len(".csv")]
+                keys = {row[KEYS[table]] for row in read_csv(out / "extracts" / later / file_name)[1]}
+                assert key not in keys, (later, key)

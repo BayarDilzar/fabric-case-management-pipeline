@@ -16,6 +16,9 @@ class State:
     reviews: dict = field(default_factory=dict)
     client_service: dict = field(default_factory=dict)
     allocators: dict = field(default_factory=dict)
+    # Episodes with a quarantined row: Silver holds a different version, so no week may build on them.
+    frozen_episodes: set = field(default_factory=set)
+    blocked_clients: set = field(default_factory=set)
 
     def table(self, name):
         return getattr(self, name)

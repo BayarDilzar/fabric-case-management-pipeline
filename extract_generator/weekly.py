@@ -1,12 +1,21 @@
 from collections import defaultdict
 from datetime import timedelta
 
-from extract_generator.history import draw_age, home_district
-from extract_generator.reference import REFERRAL_SOURCE_SHARES, SERVICE_SHARES, SEX_SHARES, SUBSTANCE_SHARES
+from extract_generator.history import draw_age, home_district, later_scores, review_row
+from extract_generator.reference import (
+    REFERRAL_SOURCE_SHARES,
+    SERVICE_SHARES,
+    SEX_SHARES,
+    SUBSTANCE_SHARES,
+    TREATED_DISCHARGE_SHARES,
+)
 from extract_generator.state import TABLES, stamp, weighted
 
 NEW_CLIENTS = 30
 RETURNING_CLIENTS = 10
+TRIAGED = 20
+DISCHARGED = 25
+DECLINED = 3
 
 
 class Week:
@@ -28,6 +37,25 @@ class Week:
         self.state.table(table)[key] = row
         self.touched[table].add(key)
         self.new[table].add(key)
+
+    def change(self, table, key, day, **values):
+        row = self.state.table(table)[key]
+        row.update(values)
+        row["last_modified_at"] = stamp(self.rng, day)
+        self.touched[table].add(key)
+
+    def children(self, table, episode_id):
+        rows = [row for _, row in sorted(self.state.table(table).items()) if row["episode_id"] == episode_id]
+        return sorted(rows, key=lambda row: row["start_date" if table == "interventions" else "review_date"])
+
+    def open_episodes(self):
+        return [
+            key
+            for key in sorted(self.state.episodes)
+            if not self.state.episodes[key]["discharge_date"]
+            and key not in self.touched["episodes"]
+            and key not in self.state.frozen_episodes
+        ]
 
     def episodes_by_client(self):
         grouped = defaultdict(list)
@@ -80,13 +108,58 @@ class Week:
 
     def returning_clients(self):
         grouped = self.episodes_by_client()
-        pool = [client_id for client_id in sorted(grouped) if self.can_return(client_id, grouped[client_id])]
+        pool = [
+            client_id
+            for client_id in sorted(grouped)
+            if client_id not in self.state.blocked_clients and self.can_return(client_id, grouped[client_id])
+        ]
         for client_id in self.rng.sample(pool, min(RETURNING_CLIENTS, len(pool))):
             self.refer(client_id, self.state.client_service[client_id])
+
+    def triage(self):
+        pool = [key for key in self.open_episodes() if not self.state.episodes[key]["triage_date"]]
+        for key in self.rng.sample(pool, min(TRIAGED, len(pool))):
+            day = self.day()
+            self.change("episodes", key, day, triage_date=day)
+
+    def exit_review(self, episode_id, day):
+        reviews = self.children("reviews", episode_id)
+        if not reviews:
+            # An EXIT with no START before it would break the review pattern.
+            return
+        last = reviews[-1]
+        days_used = last["days_used_last_28"] if last["days_used_last_28"] is not None else self.rng.randint(10, 28)
+        quality = last["quality_of_life"] if last["quality_of_life"] is not None else self.rng.randint(4, 12)
+        review = review_row(self.rng, "EXIT", day, *later_scores(self.rng, days_used, quality))
+        review_id = self.state.allocators["reviews"].new_id()
+        review.update(review_id=review_id, episode_id=episode_id, last_modified_at=stamp(self.rng, day))
+        self.add("reviews", review_id, review)
+
+    def discharge(self):
+        open_keys = self.open_episodes()
+        treated = {row["episode_id"] for row in self.state.interventions.values()}
+        untreated = [key for key in open_keys if self.state.episodes[key]["triage_date"] and key not in treated]
+        declined = self.rng.sample(untreated, min(DECLINED, len(untreated)))
+        in_treatment = [key for key in open_keys if key in treated]
+        for key in declined:
+            day = self.day()
+            self.change("episodes", key, day, discharge_date=day, discharge_reason="DECLINED")
+        for key in self.rng.sample(in_treatment, min(DISCHARGED - len(declined), len(in_treatment))):
+            day = self.day()
+            reason = weighted(self.rng, TREATED_DISCHARGE_SHARES)
+            self.change("episodes", key, day, discharge_date=day, discharge_reason=reason)
+            # Nothing may outlive the episode, so running treatment ends on the discharge day.
+            for intervention in self.children("interventions", key):
+                if intervention["end_date"] is None:
+                    self.change("interventions", intervention["intervention_id"], day, end_date=day)
+            if reason in ("COMPLETED", "TRANSFERRED"):
+                self.exit_review(key, day)
 
 
 def run_week(state, rng, previous_cutoff, cutoff):
     week = Week(state, rng, previous_cutoff, cutoff)
     week.new_clients()
     week.returning_clients()
+    week.triage()
+    week.discharge()
     return week.touched, week.new

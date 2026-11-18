@@ -25,6 +25,17 @@ def extract_rng(seed, number):
     return Random(seed * 1000 + number)
 
 
+def freeze(state, defects):
+    for line in defects:
+        if line["expected_outcome"] != "QUARANTINED":
+            continue
+        table = line["file_name"][: -len(".csv")]
+        key = line["record_key"]
+        episode_id = key if table == "episodes" else state.table(table)[key]["episode_id"]
+        state.frozen_episodes.add(episode_id)
+        state.blocked_clients.add(state.episodes[episode_id]["client_id"])
+
+
 def build(seed):
     rng = extract_rng(seed, 0)
     state = build_history(rng)
@@ -34,6 +45,7 @@ def build(seed):
     history = Extract(CUTOFFS[0], columns, files, [], view)
     every_key = {table: set(state.table(table)) for table in TABLES}
     history.defects = inject(history, rng, HISTORY_PLAN, state, every_key)
+    freeze(state, history.defects)
     extracts = [history]
     for number in range(1, WEEKS + 1):
         rng = extract_rng(seed, number)

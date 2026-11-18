@@ -3,6 +3,7 @@
 import csv
 import re
 from collections import defaultdict
+from functools import lru_cache
 from datetime import date, datetime, time
 
 SPEC_SERVICES = {
@@ -462,8 +463,16 @@ def load_extract(out, extract_date, previous):
     return view
 
 
-def silver_views(out):
-    view = {}
+@lru_cache(maxsize=None)
+def silver_by_date(out):
+    """Silver after each extract, keyed by extract date. Callers must not change the views."""
+    views, view = {}, {}
     for extract_date in extract_dates(out):
         view = load_extract(out, extract_date, view)
+        views[extract_date] = view
+    return views
+
+
+def silver_views(out):
+    for extract_date, view in silver_by_date(out).items():
         yield date.fromisoformat(extract_date), view
