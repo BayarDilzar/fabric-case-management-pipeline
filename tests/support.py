@@ -323,9 +323,19 @@ RULES = [
     rule_r15_age_at_referral,
     rule_died_is_final,
 ]
+def rule_six_monthly_reviews(view, cutoff):
+    # The code list calls REVIEW a six-monthly review, so each one comes 182 days after the last.
+    for episode_id, rows in sorted(children(view, "reviews").items()):
+        rows = sorted(rows, key=lambda row: (row["review_date"], row["review_id"]))
+        for earlier, later in zip(rows, rows[1:]):
+            gap = (as_date(later["review_date"]) - as_date(earlier["review_date"])).days
+            if later["review_type"] == "REVIEW" and gap != 182:
+                yield f"CADENCE {later['review_id']}: {gap} days after the previous review"
+
+
 # How clean source data is shaped. Silver can break these legitimately: a quarantined
 # intervention leaves its episode looking untreated.
-SHAPE_RULES = [rule_review_pattern, rule_treatment_matches_discharge_reason]
+SHAPE_RULES = [rule_review_pattern, rule_treatment_matches_discharge_reason, rule_six_monthly_reviews]
 
 
 def check_rules(view, cutoff):

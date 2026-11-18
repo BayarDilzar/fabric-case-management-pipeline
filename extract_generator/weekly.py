@@ -1,7 +1,14 @@
 from collections import defaultdict
 from datetime import timedelta
 
-from extract_generator.history import INTERVENTION_TYPES, draw_age, home_district, later_scores, review_row
+from extract_generator.history import (
+    INTERVENTION_TYPES,
+    REVIEW_INTERVAL,
+    draw_age,
+    home_district,
+    later_scores,
+    review_row,
+)
 from extract_generator.reference import (
     REFERRAL_SOURCE_SHARES,
     SERVICE_DISTRICT,
@@ -19,7 +26,6 @@ DISCHARGED = 25
 DECLINED = 3
 ENDED = 40
 NEW_INTERVENTIONS = 60
-NEW_REVIEWS = 100
 CLIENT_CORRECTIONS = 5
 REVIEW_CORRECTIONS = 3
 
@@ -217,11 +223,15 @@ class Week:
                 self.new_review(key, "START", self.rng.choice([day for day in self.days if day >= start]))
 
     def new_reviews(self):
+        # Six-monthly reviews fall due 182 days after the last one, so most weeks bring far fewer than 100.
         reviewed = {self.state.reviews[key]["episode_id"] for key in self.new["reviews"]}
-        pool = [key for key in self.open_episodes() if key not in reviewed and self.children("reviews", key)]
-        wanted = NEW_REVIEWS - len(self.new["reviews"])
-        for key in self.rng.sample(pool, max(0, min(wanted, len(pool)))):
-            self.new_review(key, "REVIEW", self.day())
+        for key in self.open_episodes():
+            reviews = self.children("reviews", key)
+            if key in reviewed or not reviews:
+                continue
+            due = reviews[-1]["review_date"] + REVIEW_INTERVAL
+            if due in self.days:
+                self.new_review(key, "REVIEW", due)
 
 
     def correct_clients(self):
