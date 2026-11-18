@@ -6,7 +6,7 @@ import pytest
 
 from extract_generator.history import build_history
 from extract_generator.state import snapshot
-from tests.support import SPEC_SERVICES, check_rules
+from tests.support import SPEC_SERVICES, check_rules, check_shape
 
 HISTORY_CUTOFF = date(2026, 10, 25)
 
@@ -30,6 +30,10 @@ def test_history_has_2000_clients_split_1500_400_100_by_episode_count(history):
 
 def test_history_obeys_every_rule(history):
     assert check_rules(history, HISTORY_CUTOFF) == []
+
+
+def test_history_treatment_and_reviews_have_the_clean_shape(history):
+    assert check_shape(history, HISTORY_CUTOFF) == []
 
 
 def test_history_sex_shares_are_close_to_the_spec(history):

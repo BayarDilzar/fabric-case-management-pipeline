@@ -290,8 +290,6 @@ RULES = [
     rule_r09_score_ranges,
     rule_r12_interventions_inside_episode,
     rule_r12_reviews_inside_episode,
-    rule_review_pattern,
-    rule_treatment_matches_discharge_reason,
     rule_r07_discharge_after_referral,
     rule_r11_triage_after_referral,
     rule_r13_discharge_date_and_reason_together,
@@ -299,10 +297,17 @@ RULES = [
     rule_r15_age_at_referral,
     rule_died_is_final,
 ]
+# How clean source data is shaped. Silver can break these legitimately: a quarantined
+# intervention leaves its episode looking untreated.
+SHAPE_RULES = [rule_review_pattern, rule_treatment_matches_discharge_reason]
 
 
 def check_rules(view, cutoff):
     return [problem for rule in RULES for problem in rule(view, cutoff)]
+
+
+def check_shape(view, cutoff):
+    return [problem for rule in SHAPE_RULES for problem in rule(view, cutoff)]
 
 
 DEFECT_COLUMNS = [
@@ -354,6 +359,13 @@ def detect_duplicates(file_name, key_column, rows):
     return found
 
 
+def detect_row_defects(table, row):
+    file_name, key = f"{table}.csv", row[KEYS[table]]
+    for column in REQUIRED[table]:
+        if not row[column].strip():
+            yield (file_name, key, column, "MISSING_REQUIRED", row[column])
+
+
 def detect_defects(out, extract_date):
     """Find defects in one extract's files using only the spec's checks, not the manifest."""
     found = set()
@@ -362,6 +374,8 @@ def detect_defects(out, extract_date):
         file_name = f"{table}.csv"
         _, rows = read_csv(folder / file_name)
         found |= detect_duplicates(file_name, KEYS[table], rows)
+        for row in rows:
+            found |= set(detect_row_defects(table, row))
     return found
 
 
@@ -383,6 +397,9 @@ def load_extract(out, extract_date, previous):
                 newer = [i for i in matches if rows[i]["last_modified_at"] > line["injected_value"]]
                 assert len(matches) == 2 and len(older) == 1 and len(newer) == 1, line
                 del rows[older[0]]
+            elif line["expected_outcome"] == "QUARANTINED":
+                assert len(matches) == 1, line
+                del rows[matches[0]]
         for row in rows:
             key = row[KEYS[table]]
             loaded = view[table].get(key)

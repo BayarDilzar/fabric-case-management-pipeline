@@ -24,6 +24,9 @@ HISTORY_PLAN = [
     ("DUP_EXACT", "reviews", "", 30),
     ("DUP_VERSION", "episodes", "", 10),
     ("DUP_VERSION", "interventions", "", 10),
+    ("MISSING_REQUIRED", "episodes", "referral_date", 8),
+    ("MISSING_REQUIRED", "interventions", "start_date", 10),
+    ("MISSING_REQUIRED", "reviews", "review_date", 12),
 ]
 # The fields an older version did not have yet.
 LATER_FIELDS = {"episodes": ["discharge_date", "discharge_reason"], "interventions": ["end_date"]}
@@ -33,8 +36,11 @@ TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
 class Injector:
     """Adds defects to one extract's rendered rows and records each one for the manifest."""
 
-    def __init__(self, extract, rng):
+    def __init__(self, extract, rng, state, new_keys):
         self.files = extract.files
+        self.new_keys = new_keys
+        # Episodes that have interventions or reviews in the source system, loaded or not.
+        self.parents = {row["episode_id"] for name in ("interventions", "reviews") for row in state.table(name).values()}
         self.cutoff = extract.cutoff
         self.rng = rng
         self.rows = {table: {row[KEYS[table]]: row for row in self.files[f"{table}.csv"]} for table in TABLES}
@@ -56,7 +62,15 @@ class Injector:
         self.place_inserts()
         return self.lines
 
+    def rejectable(self, table, key):
+        # A rejected row must have no children, so one defect means one quarantined row (decision D2).
+        is_leaf = table != "episodes" or key not in self.parents
+        return key in self.new_keys[table] and is_leaf
+
     def eligible(self, defect_type, table, row):
+        key = row[KEYS[table]]
+        if defect_type == "MISSING_REQUIRED":
+            return self.rejectable(table, key)
         if defect_type == "DUP_VERSION":
             if table == "episodes":
                 # The older version is stamped an hour earlier, so it must still fall after its last date.
@@ -96,6 +110,10 @@ class Injector:
         self.inserts.append((table, older, newer))
         self.record(table, key, "", "DUP_VERSION", older["last_modified_at"], "REMOVED")
 
+    def missing_required(self, table, field, key):
+        self.rows[table][key][field] = ""
+        self.record(table, key, field, "MISSING_REQUIRED", "", "QUARANTINED", reason="MISSING_REQUIRED")
+
     def place_inserts(self):
         for table, row, anchor in self.inserts:
             rows = self.files[f"{table}.csv"]
@@ -107,5 +125,5 @@ class Injector:
             rows.insert(position if self.rng.random() < 0.5 else position + 1, row)
 
 
-def inject(extract, rng, plan):
-    return Injector(extract, rng).run(plan)
+def inject(extract, rng, plan, state, new_keys):
+    return Injector(extract, rng, state, new_keys).run(plan)

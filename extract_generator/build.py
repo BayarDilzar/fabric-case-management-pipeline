@@ -29,5 +29,6 @@ def build(seed):
     files = {f"{table}.csv": [dict(row) for row in view[table].values()] for table in TABLES}
     columns = {f"{table}.csv": COLUMNS[table] for table in TABLES}
     history = Extract(CUTOFFS[0], columns, files, [], view)
-    history.defects = inject(history, rng, HISTORY_PLAN)
+    every_key = {table: set(state.table(table)) for table in TABLES}
+    history.defects = inject(history, rng, HISTORY_PLAN, state, every_key)
     return [history]

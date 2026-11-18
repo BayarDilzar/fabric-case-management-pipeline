@@ -18,6 +18,7 @@ HISTORY = "2026-10-25"
 CATALOGUE = {
     "DUP_EXACT": ("REMOVED", ""),
     "DUP_VERSION": ("REMOVED", ""),
+    "MISSING_REQUIRED": ("QUARANTINED", "MISSING_REQUIRED"),
 }
 HISTORY_COUNTS = {
     ("DUP_EXACT", "clients.csv", ""): 20,
@@ -26,6 +27,9 @@ HISTORY_COUNTS = {
     ("DUP_EXACT", "reviews.csv", ""): 30,
     ("DUP_VERSION", "episodes.csv", ""): 10,
     ("DUP_VERSION", "interventions.csv", ""): 10,
+    ("MISSING_REQUIRED", "episodes.csv", "referral_date"): 8,
+    ("MISSING_REQUIRED", "interventions.csv", "start_date"): 10,
+    ("MISSING_REQUIRED", "reviews.csv", "review_date"): 12,
 }
 
 
@@ -79,3 +83,22 @@ def test_older_versions_sit_next_to_the_newer_row_on_either_side(output_for):
         sides["before" if rows[first]["last_modified_at"] == line["injected_value"] else "after"] += 1
 
     assert sides["before"] and sides["after"]
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_quarantined_episodes_have_no_intervention_or_review_rows(seed, output_for):
+    out = output_for(seed)
+    parents = set()
+    for extract_date in extract_dates(out):
+        for name in ("interventions.csv", "reviews.csv"):
+            parents |= {row["episode_id"] for row in read_csv(out / "extracts" / extract_date / name)[1]}
+
+    rejected = {
+        line["record_key"]
+        for extract_date in extract_dates(out)
+        for line in defect_lines(out, extract_date)
+        if line["file_name"] == "episodes.csv" and line["expected_outcome"] == "QUARANTINED"
+    }
+
+    assert rejected
+    assert not rejected & parents
