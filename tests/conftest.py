@@ -5,15 +5,21 @@ from extract_generator.output import write_all
 
 
 @pytest.fixture(scope="session")
-def output_for(tmp_path_factory):
-    """Write the full output once per seed and share it across tests."""
-    written = {}
+def built(tmp_path_factory):
+    """Build and write the full output once per seed; return the extracts and the folder."""
+    cache = {}
 
-    def output(seed):
-        if seed not in written:
+    def get(seed):
+        if seed not in cache:
             folder = tmp_path_factory.mktemp(f"seed{seed}")
-            write_all(build(seed), seed, folder)
-            written[seed] = folder
-        return written[seed]
+            extracts = build(seed)
+            write_all(extracts, seed, folder)
+            cache[seed] = (extracts, folder)
+        return cache[seed]
 
-    return output
+    return get
+
+
+@pytest.fixture(scope="session")
+def output_for(built):
+    return lambda seed: built(seed)[1]
