@@ -164,7 +164,8 @@ class Week:
         open_keys = self.open_episodes()
         untreated = [key for key in open_keys if self.state.episodes[key]["triage_date"] and not self.kids["interventions"][key]]
         declined = self.rng.sample(untreated, min(DECLINED, len(untreated)))
-        in_treatment = [key for key in open_keys if self.kids["interventions"][key]]
+        # Wait for the START review before closing treatment, so every closed treatment has one.
+        in_treatment = [key for key in open_keys if self.kids["interventions"][key] and self.kids["reviews"][key]]
         for key in declined:
             day = self.day()
             self.change("episodes", key, day, discharge_date=day, discharge_reason="DECLINED")
