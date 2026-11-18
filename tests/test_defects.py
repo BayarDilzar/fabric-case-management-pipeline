@@ -22,6 +22,7 @@ CATALOGUE = {
     "MISSING_REQUIRED": ("QUARANTINED", "MISSING_REQUIRED"),
     "DATE_FORMAT": ("CORRECTED", ""),
     "CODE_CASE": ("CORRECTED", ""),
+    "CODE_UNKNOWN": ("QUARANTINED", "INVALID_CODE"),
 }
 HISTORY_COUNTS = {
     ("DUP_EXACT", "clients.csv", ""): 20,
@@ -40,6 +41,9 @@ HISTORY_COUNTS = {
     ("CODE_CASE", "clients.csv", "sex"): 10,
     ("CODE_CASE", "episodes.csv", "referral_source"): 15,
     ("CODE_CASE", "interventions.csv", "intervention_type"): 10,
+    ("CODE_UNKNOWN", "episodes.csv", "primary_substance"): 8,
+    ("CODE_UNKNOWN", "episodes.csv", "service_code"): 4,
+    ("CODE_UNKNOWN", "interventions.csv", "intervention_type"): 6,
 }
 
 
@@ -137,3 +141,11 @@ def test_code_case_defects_correct_to_the_trimmed_upper_case_code(output_for):
     for line in lines:
         assert line["injected_value"] != line["expected_value"]
         assert line["injected_value"].strip().upper() == line["expected_value"]
+
+
+def test_unknown_codes_are_the_believable_values_the_spec_names(output_for):
+    lines = [line for line in defect_lines(output_for(2026), HISTORY) if line["defect_type"] == "CODE_UNKNOWN"]
+
+    values = {(line["field"], line["injected_value"]) for line in lines}
+
+    assert values == {("primary_substance", "HEROIN"), ("service_code", "S07"), ("intervention_type", "PHARMACY")}

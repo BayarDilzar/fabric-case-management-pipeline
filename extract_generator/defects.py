@@ -34,7 +34,12 @@ HISTORY_PLAN = [
     ("CODE_CASE", "clients", "sex", 10),
     ("CODE_CASE", "episodes", "referral_source", 15),
     ("CODE_CASE", "interventions", "intervention_type", 10),
+    ("CODE_UNKNOWN", "episodes", "primary_substance", 8),
+    ("CODE_UNKNOWN", "episodes", "service_code", 4),
+    ("CODE_UNKNOWN", "interventions", "intervention_type", 6),
 ]
+# Believable mistakes: a drug name typed as a code, a near-miss code, a service that does not exist.
+UNKNOWN_CODES = {"primary_substance": "HEROIN", "intervention_type": "PHARMACY", "service_code": "S07"}
 # UK day-first order and the NDTMS compact format. Never month-first, which cannot be told apart.
 OTHER_DATE_FORMATS = ["%d/%m/%Y", "%Y%m%d"]
 # The fields an older version did not have yet.
@@ -80,7 +85,7 @@ class Injector:
         key = row[KEYS[table]]
         if defect_type == "DATE_FORMAT":
             return bool(row[field])
-        if defect_type == "MISSING_REQUIRED":
+        if defect_type in ("MISSING_REQUIRED", "CODE_UNKNOWN"):
             return self.rejectable(table, key)
         if defect_type == "DUP_VERSION":
             if table == "episodes":
@@ -136,6 +141,10 @@ class Injector:
         code = row[field]
         row[field] = self.rng.choice([code.lower(), " " + code, code + " "])
         self.record(table, key, field, "CODE_CASE", row[field], "CORRECTED", expected=code)
+
+    def code_unknown(self, table, field, key):
+        self.rows[table][key][field] = UNKNOWN_CODES[field]
+        self.record(table, key, field, "CODE_UNKNOWN", UNKNOWN_CODES[field], "QUARANTINED", reason="INVALID_CODE")
 
     def place_inserts(self):
         for table, row, anchor in self.inserts:
