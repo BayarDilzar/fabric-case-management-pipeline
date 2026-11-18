@@ -134,7 +134,7 @@ def test_discharges_bring_exit_reviews_and_end_open_interventions_on_the_same_da
     for week in WEEKS:
         discharged = {row["episode_id"]: row for row in changes(out, week, "episodes", "discharge_date")}
         ended = [row for row in changes(out, week, "interventions", "end_date") if row["episode_id"] in discharged]
-        exits = [row for row in delivered_rows(out, week, "reviews") if row["review_type"] == "EXIT"]
+        exits = [row for row in new_rows(out, week, "reviews") if row["review_type"] == "EXIT"]
         assert ended and exits
         for row in ended:
             assert row["end_date"] == discharged[row["episode_id"]]["discharge_date"]
@@ -182,3 +182,27 @@ def test_first_treatment_in_a_week_comes_with_its_start_review(output_for):
         starts = {row["episode_id"] for row in new_rows(out, week, "reviews") if row["review_type"] == "START"}
         assert starters
         assert starts <= starters
+
+
+def changed_rows(out, week, table):
+    dates = extract_dates(out)
+    before = silver_by_date(out)[dates[dates.index(week) - 1]]
+    return [
+        (before[table][row[KEYS[table]]], row)
+        for row in delivered_rows(out, week, table)
+        if row[KEYS[table]] in before[table]
+    ]
+
+
+def test_each_week_corrects_5_clients_and_3_review_scores(output_for):
+    out = output_for(2026)
+
+    for week in WEEKS:
+        clients = changed_rows(out, week, "clients")
+        reviews = changed_rows(out, week, "reviews")
+        assert len(clients) == 5
+        for old, new in clients:
+            assert (old["sex"] == "U" and new["sex"] in ("F", "M")) or old["local_authority_code"] != new["local_authority_code"]
+        assert len(reviews) == 3
+        for old, new in reviews:
+            assert old["days_used_last_28"] != new["days_used_last_28"]

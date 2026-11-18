@@ -4,6 +4,7 @@ from datetime import timedelta
 from extract_generator.history import INTERVENTION_TYPES, draw_age, home_district, later_scores, review_row
 from extract_generator.reference import (
     REFERRAL_SOURCE_SHARES,
+    SERVICE_DISTRICT,
     SERVICE_SHARES,
     SEX_SHARES,
     SUBSTANCE_SHARES,
@@ -19,6 +20,8 @@ DECLINED = 3
 ENDED = 40
 NEW_INTERVENTIONS = 60
 NEW_REVIEWS = 100
+CLIENT_CORRECTIONS = 5
+REVIEW_CORRECTIONS = 3
 
 
 class Week:
@@ -221,6 +224,38 @@ class Week:
             self.new_review(key, "REVIEW", self.day())
 
 
+    def correct_clients(self):
+        grouped = self.episodes_by_client()
+        pool = [
+            key
+            for key in sorted(self.state.clients)
+            if key not in self.touched["clients"] and grouped[key][-1]["discharge_reason"] != "DIED"
+        ]
+        for key in self.rng.sample(pool, min(CLIENT_CORRECTIONS, len(pool))):
+            client = self.state.clients[key]
+            home = SERVICE_DISTRICT[self.state.client_service[key]]
+            if client["sex"] == "U":
+                values = {"sex": self.rng.choice(["F", "M"])}
+            elif not client["local_authority_code"]:
+                values = {"local_authority_code": home}
+            else:
+                # A move to another district the provider serves.
+                others = sorted(d for d in SERVICE_DISTRICT.values() if d != client["local_authority_code"])
+                values = {"local_authority_code": self.rng.choice(others)}
+            self.change("clients", key, self.day(), **values)
+
+    def correct_reviews(self):
+        pool = [
+            key
+            for key in sorted(self.state.reviews)
+            if key not in self.touched["reviews"] and self.state.reviews[key]["episode_id"] not in self.state.frozen_episodes
+        ]
+        for key in self.rng.sample(pool, min(REVIEW_CORRECTIONS, len(pool))):
+            current = self.state.reviews[key]["days_used_last_28"]
+            value = self.rng.choice([n for n in range(29) if n != current])
+            self.change("reviews", key, self.day(), days_used_last_28=value)
+
+
 def run_week(state, rng, previous_cutoff, cutoff):
     week = Week(state, rng, previous_cutoff, cutoff)
     week.new_clients()
@@ -230,4 +265,6 @@ def run_week(state, rng, previous_cutoff, cutoff):
     week.end_interventions()
     week.new_interventions()
     week.new_reviews()
+    week.correct_clients()
+    week.correct_reviews()
     return week.touched, week.new
