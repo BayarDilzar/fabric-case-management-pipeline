@@ -77,7 +77,9 @@ def new_episode(rng, service, referral, must_close_by):
     days = rng.randint(90, 1000) if episode["primary_substance"] == "OPIATE" else rng.randint(30, 300)
     end = start + timedelta(days=days)
     if must_close_by:
-        end = min(end, must_close_by)
+        # A random day in the 45 before the next referral, not always the day before it.
+        # The next referral is at least 119 days on, and treatment starts by day 70, so this stays after the start.
+        end = min(end, must_close_by - timedelta(days=rng.randint(0, 45)))
     if end <= CUTOFF:
         shares = TREATED_DISCHARGE_SHARES
         if must_close_by:

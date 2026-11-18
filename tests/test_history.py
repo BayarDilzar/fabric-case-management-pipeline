@@ -6,7 +6,7 @@ import pytest
 
 from extract_generator.history import build_history
 from extract_generator.state import snapshot
-from tests.support import SPEC_SERVICES, check_rules, check_shape
+from tests.support import SPEC_SERVICES, check_rules, check_shape, episodes_by_client
 
 HISTORY_CUTOFF = date(2026, 10, 25)
 
@@ -89,3 +89,13 @@ def test_history_reviews_have_some_missing_scores_and_use_falls_by_exit(history)
     assert abs(share(reviews, lambda r: r["days_used_last_28"] == "") - 0.08) < 0.02
     assert abs(share(reviews, lambda r: r["quality_of_life"] == "") - 0.08) < 0.02
     assert mean_days("EXIT") < mean_days("START")
+
+
+def test_history_returning_clients_are_rarely_referred_the_day_after_discharge(history):
+    gaps = []
+    for rows in episodes_by_client(history).values():
+        for earlier, later in zip(rows, rows[1:]):
+            gaps.append((date.fromisoformat(later["referral_date"]) - date.fromisoformat(earlier["discharge_date"])).days)
+
+    assert len(gaps) == 600
+    assert sum(1 for gap in gaps if gap == 1) / len(gaps) < 0.05
