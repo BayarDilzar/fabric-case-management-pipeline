@@ -87,10 +87,40 @@ def new_episode(rng, service, referral, must_close_by):
     return episode
 
 
+INTERVENTION_TYPES = ["PHARMA", "PSYCHO", "RECOVERY"]
+
+
+def new_interventions(rng, episode):
+    start = episode["_start"]
+    if start is None:
+        return []
+    count = weighted(rng, [(1, 50), (2, 35), (3, 15)])
+    opiate = episode["primary_substance"] == "OPIATE"
+    first = "PHARMA" if opiate and rng.random() < 0.8 else "PSYCHO"
+    others = [kind for kind in INTERVENTION_TYPES if kind != first]
+    rng.shuffle(others)
+    closed = episode["discharge_date"]
+    last_day = closed or CUTOFF
+    rows = []
+    for i, kind in enumerate([first] + others[: count - 1]):
+        begin = start if i == 0 else start + timedelta(days=rng.randint(0, (last_day - start).days // 2))
+        if closed:
+            # The first treatment runs to discharge; nothing may outlive the episode.
+            end = closed if i == 0 else begin + timedelta(days=rng.randint(0, (closed - begin).days))
+        elif i == 0 or rng.random() < 0.5:
+            end = None
+        else:
+            end = begin + timedelta(days=rng.randint(0, (CUTOFF - begin).days))
+        rows.append(
+            {"intervention_type": kind, "start_date": begin, "end_date": end, "last_modified_at": None, "_episode": episode}
+        )
+    return rows
+
+
 def build_history(rng):
     counts = list(EPISODE_COUNTS)
     rng.shuffle(counts)
-    clients, episodes = [], []
+    clients, episodes, interventions = [], [], []
     for count in counts:
         service = weighted(rng, SERVICE_SHARES)
         dates = referral_dates(rng, count)
@@ -108,13 +138,16 @@ def build_history(rng):
             episode = new_episode(rng, service, referral, must_close_by)
             episode["_client"] = client
             episodes.append(episode)
+            interventions.extend(new_interventions(rng, episode))
 
     state = State()
     # Ids follow creation order: clients by first referral, episodes by referral.
     clients.sort(key=lambda row: row["_first_referral"])
     episodes.sort(key=lambda row: row["referral_date"])
+    interventions.sort(key=lambda row: row["start_date"])
     state.allocators["clients"] = IdAllocator("C", rng, len(clients))
     state.allocators["episodes"] = IdAllocator("E", rng, len(episodes))
+    state.allocators["interventions"] = IdAllocator("I", rng, len(interventions))
     for client, client_id in zip(clients, state.allocators["clients"].history_ids()):
         client["client_id"] = client_id
         state.client_service[client_id] = client.pop("_service")
@@ -125,4 +158,8 @@ def build_history(rng):
         episode["client_id"] = episode.pop("_client")["client_id"]
         episode.pop("_start")
         state.episodes[episode_id] = episode
+    for intervention, intervention_id in zip(interventions, state.allocators["interventions"].history_ids()):
+        intervention["intervention_id"] = intervention_id
+        intervention["episode_id"] = intervention.pop("_episode")["episode_id"]
+        state.interventions[intervention_id] = intervention
     return state

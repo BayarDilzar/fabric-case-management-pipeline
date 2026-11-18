@@ -85,8 +85,62 @@ def rule_died_is_final(view, cutoff):
                 yield f"DIED {client_id}: episode after {row['episode_id']}"
 
 
+def children(view, table):
+    grouped = defaultdict(list)
+    for key in sorted(view[table]):
+        grouped[view[table][key]["episode_id"]].append(view[table][key])
+    return grouped
+
+
+def rule_r03_intervention_parent(view, cutoff):
+    for key in sorted(view["interventions"]):
+        if view["interventions"][key]["episode_id"] not in view["episodes"]:
+            yield f"R03 {key}: episode missing"
+
+
+def rule_r08_end_after_start(view, cutoff):
+    for key in sorted(view["interventions"]):
+        row = view["interventions"][key]
+        if row["end_date"] and as_date(row["end_date"]) < as_date(row["start_date"]):
+            yield f"R08 {key}: ends before it starts"
+
+
+def rule_r12_interventions_inside_episode(view, cutoff):
+    for key in sorted(view["interventions"]):
+        row = view["interventions"][key]
+        episode = view["episodes"].get(row["episode_id"])
+        if episode is None:
+            continue
+        last_day = as_date(episode["discharge_date"]) or cutoff
+        if not as_date(episode["referral_date"]) <= as_date(row["start_date"]) <= last_day:
+            yield f"R12 {key}: starts outside its episode"
+        if episode["discharge_date"] and not row["end_date"]:
+            yield f"R12 {key}: still open in a closed episode"
+        if row["end_date"] and as_date(row["end_date"]) > last_day:
+            yield f"R12 {key}: ends after its episode"
+
+
+def rule_treatment_matches_discharge_reason(view, cutoff):
+    # DECLINED means the client never started treatment; any other closure means they did.
+    treated = children(view, "interventions")
+    for key in sorted(view["episodes"]):
+        row = view["episodes"][key]
+        if row["discharge_reason"] == "DECLINED" and treated[key]:
+            yield f"TREATMENT {key}: declined but has interventions"
+        if row["discharge_reason"] not in ("", "DECLINED") and not treated[key]:
+            yield f"TREATMENT {key}: closed as {row['discharge_reason']} with no intervention"
+        if not row["triage_date"] and treated[key]:
+            yield f"TREATMENT {key}: treated before triage"
+        if len(treated[key]) > 3:
+            yield f"TREATMENT {key}: more than three interventions"
+
+
 RULES = [
     rule_r02_episode_parents,
+    rule_r03_intervention_parent,
+    rule_r08_end_after_start,
+    rule_r12_interventions_inside_episode,
+    rule_treatment_matches_discharge_reason,
     rule_r07_discharge_after_referral,
     rule_r11_triage_after_referral,
     rule_r13_discharge_date_and_reason_together,

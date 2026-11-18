@@ -61,3 +61,14 @@ def test_history_has_open_untriaged_declined_and_died_episodes(history):
     assert 0.15 < reasons[""] / len(episodes) < 0.45
     assert reasons["DECLINED"] > 0
     assert reasons["DIED"] > 0
+
+
+def test_history_treated_episodes_have_one_to_three_interventions_in_spec_shares(history):
+    per_episode = Counter(row["episode_id"] for row in history["interventions"].values())
+    shares = Counter(per_episode.values())
+    treated = sum(shares.values())
+
+    assert set(shares) == {1, 2, 3}
+    assert abs(shares[1] / treated - 0.50) < 0.04
+    assert abs(shares[2] / treated - 0.35) < 0.04
+    assert abs(shares[3] / treated - 0.15) < 0.04
