@@ -77,8 +77,9 @@ def test_silver_after_each_extract_obeys_every_rule(seed, output_for):
         assert check_rules(view, cutoff) == []
 
 
-def test_historical_defect_counts_match_the_spec(output_for):
-    lines = defect_lines(output_for(2026), HISTORY)
+@pytest.mark.parametrize("seed", SEEDS)
+def test_historical_defect_counts_match_the_spec(seed, output_for):
+    lines = defect_lines(output_for(seed), HISTORY)
 
     counts = Counter((line["defect_type"], line["file_name"], line["field"]) for line in lines)
 
