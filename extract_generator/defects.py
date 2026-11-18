@@ -37,6 +37,9 @@ HISTORY_PLAN = [
     ("CODE_UNKNOWN", "episodes", "primary_substance", 8),
     ("CODE_UNKNOWN", "episodes", "service_code", 4),
     ("CODE_UNKNOWN", "interventions", "intervention_type", 6),
+    ("ORPHAN", "episodes", "client_id", 6),
+    ("ORPHAN", "interventions", "episode_id", 12),
+    ("ORPHAN", "reviews", "episode_id", 15),
 ]
 # Believable mistakes: a drug name typed as a code, a near-miss code, a service that does not exist.
 UNKNOWN_CODES = {"primary_substance": "HEROIN", "intervention_type": "PHARMACY", "service_code": "S07"}
@@ -53,6 +56,7 @@ class Injector:
     def __init__(self, extract, rng, state, new_keys):
         self.files = extract.files
         self.new_keys = new_keys
+        self.state = state
         # Episodes that have interventions or reviews in the source system, loaded or not.
         self.parents = {row["episode_id"] for name in ("interventions", "reviews") for row in state.table(name).values()}
         self.cutoff = extract.cutoff
@@ -85,7 +89,7 @@ class Injector:
         key = row[KEYS[table]]
         if defect_type == "DATE_FORMAT":
             return bool(row[field])
-        if defect_type in ("MISSING_REQUIRED", "CODE_UNKNOWN"):
+        if defect_type in ("MISSING_REQUIRED", "CODE_UNKNOWN", "ORPHAN"):
             return self.rejectable(table, key)
         if defect_type == "DUP_VERSION":
             if table == "episodes":
@@ -145,6 +149,13 @@ class Injector:
     def code_unknown(self, table, field, key):
         self.rows[table][key][field] = UNKNOWN_CODES[field]
         self.record(table, key, field, "CODE_UNKNOWN", UNKNOWN_CODES[field], "QUARANTINED", reason="INVALID_CODE")
+
+    def orphan(self, table, field, key):
+        parent = "clients" if field == "client_id" else "episodes"
+        # A held-back id looks normal but is never issued, so the parent can never turn up later.
+        missing = self.rng.choice(self.state.allocators[parent].held_back)
+        self.rows[table][key][field] = missing
+        self.record(table, key, field, "ORPHAN", missing, "QUARANTINED", reason="ORPHAN")
 
     def place_inserts(self):
         for table, row, anchor in self.inserts:

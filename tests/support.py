@@ -377,6 +377,18 @@ def detect_row_defects(table, row):
             yield (file_name, key, column, kind, value)
 
 
+PARENTS = {"episodes": ("client_id", "clients"), "interventions": ("episode_id", "episodes"), "reviews": ("episode_id", "episodes")}
+
+
+def keys_so_far(out, extract_date, table):
+    """Every id the files have carried for a table, up to and including this extract."""
+    keys = set()
+    for earlier in extract_dates(out):
+        if earlier <= extract_date:
+            keys |= {row[KEYS[table]] for row in read_csv(out / "extracts" / earlier / f"{table}.csv")[1]}
+    return keys
+
+
 def detect_defects(out, extract_date):
     """Find defects in one extract's files using only the spec's checks, not the manifest."""
     found = set()
@@ -385,8 +397,12 @@ def detect_defects(out, extract_date):
         file_name = f"{table}.csv"
         _, rows = read_csv(folder / file_name)
         found |= detect_duplicates(file_name, KEYS[table], rows)
+        parent = PARENTS.get(table)
+        parent_keys = keys_so_far(out, extract_date, parent[1]) if parent else set()
         for row in rows:
             found |= set(detect_row_defects(table, row))
+            if parent and row[parent[0]] not in parent_keys:
+                found.add((file_name, row[KEYS[table]], parent[0], "ORPHAN", row[parent[0]]))
     return found
 
 

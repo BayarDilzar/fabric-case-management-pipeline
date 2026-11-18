@@ -5,6 +5,7 @@ import pytest
 
 from tests.support import (
     KEYS,
+    PARENTS,
     check_rules,
     defect_lines,
     detect_defects,
@@ -23,6 +24,7 @@ CATALOGUE = {
     "DATE_FORMAT": ("CORRECTED", ""),
     "CODE_CASE": ("CORRECTED", ""),
     "CODE_UNKNOWN": ("QUARANTINED", "INVALID_CODE"),
+    "ORPHAN": ("QUARANTINED", "ORPHAN"),
 }
 HISTORY_COUNTS = {
     ("DUP_EXACT", "clients.csv", ""): 20,
@@ -44,6 +46,9 @@ HISTORY_COUNTS = {
     ("CODE_UNKNOWN", "episodes.csv", "primary_substance"): 8,
     ("CODE_UNKNOWN", "episodes.csv", "service_code"): 4,
     ("CODE_UNKNOWN", "interventions.csv", "intervention_type"): 6,
+    ("ORPHAN", "episodes.csv", "client_id"): 6,
+    ("ORPHAN", "interventions.csv", "episode_id"): 12,
+    ("ORPHAN", "reviews.csv", "episode_id"): 15,
 }
 
 
@@ -149,3 +154,21 @@ def test_unknown_codes_are_the_believable_values_the_spec_names(output_for):
     values = {(line["field"], line["injected_value"]) for line in lines}
 
     assert values == {("primary_substance", "HEROIN"), ("service_code", "S07"), ("intervention_type", "PHARMACY")}
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_orphan_parents_look_like_normal_ids_and_never_appear_in_any_extract(seed, output_for):
+    out = output_for(seed)
+    issued = {table: set() for table in ("clients", "episodes")}
+    orphans = []
+    for extract_date in extract_dates(out):
+        for table in issued:
+            issued[table] |= {row[KEYS[table]] for row in read_csv(out / "extracts" / extract_date / f"{table}.csv")[1]}
+        orphans += [line for line in defect_lines(out, extract_date) if line["defect_type"] == "ORPHAN"]
+
+    assert orphans
+    for line in orphans:
+        parent_table = PARENTS[line["file_name"][: -len(".csv")]][1]
+        assert line["injected_value"][0] == {"clients": "C", "episodes": "E"}[parent_table]
+        assert len(line["injected_value"]) == 7 and line["injected_value"][1:].isdigit()
+        assert line["injected_value"] not in issued[parent_table]
