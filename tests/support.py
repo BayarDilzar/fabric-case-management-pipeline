@@ -52,6 +52,31 @@ DATE_FIELDS = {
     "interventions": ["start_date", "end_date"],
     "reviews": ["review_date"],
 }
+SPEC_HEADERS = {
+    "clients.csv": ["client_id", "birth_year", "sex", "local_authority_code", "last_modified_at"],
+    "episodes.csv": [
+        "episode_id",
+        "client_id",
+        "service_code",
+        "referral_date",
+        "referral_source",
+        "primary_substance",
+        "triage_date",
+        "discharge_date",
+        "discharge_reason",
+        "last_modified_at",
+    ],
+    "interventions.csv": ["intervention_id", "episode_id", "intervention_type", "start_date", "end_date", "last_modified_at"],
+    "reviews.csv": [
+        "review_id",
+        "episode_id",
+        "review_date",
+        "review_type",
+        "days_used_last_28",
+        "quality_of_life",
+        "last_modified_at",
+    ],
+}
 TABLES = ("clients", "episodes", "interventions", "reviews")
 KEYS = {"clients": "client_id", "episodes": "episode_id", "interventions": "intervention_id", "reviews": "review_id"}
 ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -419,7 +444,12 @@ def detect_defects(out, extract_date):
     folder = out / "extracts" / extract_date
     for table in TABLES:
         file_name = f"{table}.csv"
-        _, rows = read_csv(folder / file_name)
+        header, rows = read_csv(folder / file_name)
+        missing = [column for column in SPEC_HEADERS[file_name] if column not in header]
+        if missing:
+            # A file with the wrong shape fails the load, so its rows are never checked.
+            found |= {(file_name, "", column, "SCHEMA_MISSING_COLUMN", "") for column in missing}
+            continue
         found |= detect_duplicates(file_name, KEYS[table], rows)
         parent = PARENTS.get(table)
         parent_keys = keys_so_far(out, extract_date, parent[1]) if parent else set()
@@ -433,8 +463,10 @@ def detect_defects(out, extract_date):
 
 def load_extract(out, extract_date, previous):
     """Apply one extract to a copy of the Silver view, doing what the manifest says Silver should do."""
-    view = {table: dict(previous.get(table, {})) for table in TABLES}
     lines = defect_lines(out, extract_date)
+    if any(line["expected_outcome"] == "LOAD_FAILED" for line in lines):
+        return previous
+    view = {table: dict(previous.get(table, {})) for table in TABLES}
     for table in TABLES:
         file_name = f"{table}.csv"
         _, rows = read_csv(out / "extracts" / extract_date / file_name)

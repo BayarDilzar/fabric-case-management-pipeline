@@ -71,7 +71,7 @@ def test_silver_rebuilt_from_the_files_matches_the_source_after_every_week(seed,
 
     for extract in extracts:
         extract_date = extract.cutoff.isoformat()
-        if extract_date not in views:
+        if any(line["expected_outcome"] == "LOAD_FAILED" for line in extract.defects):
             continue
         rejected = quarantined_keys(out, extract_date)
         for table in TABLES:

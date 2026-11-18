@@ -3,35 +3,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tests.support import SPEC_CODES, SPEC_SERVICES, read_csv
+from tests.support import SPEC_CODES, SPEC_HEADERS, SPEC_SERVICES, read_csv
 
 REPO = Path(__file__).resolve().parents[1]
 HISTORY = "2026-10-25"
-SPEC_HEADERS = {
-    "clients.csv": ["client_id", "birth_year", "sex", "local_authority_code", "last_modified_at"],
-    "episodes.csv": [
-        "episode_id",
-        "client_id",
-        "service_code",
-        "referral_date",
-        "referral_source",
-        "primary_substance",
-        "triage_date",
-        "discharge_date",
-        "discharge_reason",
-        "last_modified_at",
-    ],
-    "interventions.csv": ["intervention_id", "episode_id", "intervention_type", "start_date", "end_date", "last_modified_at"],
-    "reviews.csv": [
-        "review_id",
-        "episode_id",
-        "review_date",
-        "review_type",
-        "days_used_last_28",
-        "quality_of_life",
-        "last_modified_at",
-    ],
-}
 
 
 def run_cli(seed, out, hash_seed):

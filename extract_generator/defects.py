@@ -95,6 +95,9 @@ def week_plan(number):
     )
 
 
+# The broken extract carries no row defects: its load must fail before any row is read.
+BROKEN_PLAN = [("SCHEMA_MISSING_COLUMN", "interventions", "end_date", 1)]
+
 # The fields an older version did not have yet.
 LATER_FIELDS = {"episodes": ["discharge_date", "discharge_reason"], "interventions": ["end_date"]}
 TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -104,6 +107,7 @@ class Injector:
     """Adds defects to one extract's rendered rows and records each one for the manifest."""
 
     def __init__(self, extract, rng, state, new_keys, weekly):
+        self.extract = extract
         self.files = extract.files
         self.snapshot = extract.snapshot
         self.new_keys = new_keys
@@ -122,6 +126,9 @@ class Injector:
         for defect_type, table, field, count in plan:
             if defect_type == "RESENT_UNCHANGED":
                 self.resend(table, count)
+                continue
+            if defect_type == "SCHEMA_MISSING_COLUMN":
+                self.drop_column(table, field)
                 continue
             pool = [
                 key
@@ -257,6 +264,14 @@ class Injector:
         for key in self.rng.sample(pool, min(count, len(pool))):
             self.inserts.append((table, dict(self.snapshot[table][key]), None))
             self.record(table, key, "", "RESENT_UNCHANGED", "", "UNCHANGED")
+
+    def drop_column(self, table, field):
+        name = f"{table}.csv"
+        # A new dict: the column lists are shared with the other extracts.
+        self.extract.columns = {**self.extract.columns, name: [c for c in self.extract.columns[name] if c != field]}
+        for row in self.files[name]:
+            del row[field]
+        self.record(table, "", field, "SCHEMA_MISSING_COLUMN", "", "LOAD_FAILED")
 
     def place_inserts(self):
         for table, row, anchor in self.inserts:
