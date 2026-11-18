@@ -16,7 +16,7 @@ DEFECT_COLUMNS = [
     "expected_reason",
 ]
 
-# (defect type, table, field, count), applied in this order (spec section 6).
+# (defect type, table, field, count), applied in this order.
 HISTORY_PLAN = [
     ("DUP_EXACT", "clients", "", 20),
     ("DUP_EXACT", "episodes", "", 15),
@@ -143,7 +143,7 @@ class Injector:
         return self.lines
 
     def rejectable(self, table, key):
-        # A rejected row must have no children, so one defect means one quarantined row (decision D2).
+        # A rejected row must have no children, so one defect means one quarantined row and nothing cascades.
         is_leaf = table != "episodes" or key not in self.parents
         return key in self.new_keys[table] and is_leaf
 

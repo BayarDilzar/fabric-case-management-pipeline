@@ -1,4 +1,4 @@
-"""Values fixed by notes/generator-spec.md."""
+"""Fixed values of the extract design: services, code lists, columns, cut-offs and shares."""
 
 from datetime import date
 
@@ -84,7 +84,7 @@ COLUMNS = {
 }
 KEYS = {"clients": "client_id", "episodes": "episode_id", "interventions": "intervention_id", "reviews": "review_id"}
 
-# Shares from section 4 of the spec, as (code, weight).
+# Shares of the clean data, as (code, weight).
 SERVICE_SHARES = [("S01", 20), ("S02", 15), ("S03", 10), ("S04", 25), ("S05", 15), ("S06", 15)]
 SEX_SHARES = [("M", 64), ("F", 34), ("U", 2)]
 SUBSTANCE_SHARES = [("ALCOHOL", 35), ("OPIATE", 30), ("CRACK", 10), ("COCAINE", 10), ("CANNABIS", 10), ("OTHER", 5)]
