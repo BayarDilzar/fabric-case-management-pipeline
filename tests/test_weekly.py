@@ -154,3 +154,31 @@ def test_quarantined_rows_never_reappear_in_a_later_extract(seed, output_for):
                 table = file_name[: -len(".csv")]
                 keys = {row[KEYS[table]] for row in read_csv(out / "extracts" / later / file_name)[1]}
                 assert key not in keys, (later, key)
+
+
+def new_rows(out, week, table):
+    dates = extract_dates(out)
+    before = silver_by_date(out)[dates[dates.index(week) - 1]]
+    return [row for row in delivered_rows(out, week, table) if row[KEYS[table]] not in before[table]]
+
+
+def test_each_week_ends_40_interventions_and_adds_60_interventions_and_100_reviews(output_for):
+    out = output_for(2026)
+
+    for week in WEEKS:
+        assert len(changes(out, week, "interventions", "end_date")) == 40
+        assert len(new_rows(out, week, "interventions")) == 60
+        assert len(new_rows(out, week, "reviews")) == 100
+
+
+def test_first_treatment_in_a_week_comes_with_its_start_review(output_for):
+    out = output_for(2026)
+    dates = extract_dates(out)
+
+    for week in WEEKS:
+        before = silver_by_date(out)[dates[dates.index(week) - 1]]
+        treated_before = {row["episode_id"] for row in before["interventions"].values()}
+        starters = {row["episode_id"] for row in new_rows(out, week, "interventions")} - treated_before
+        starts = {row["episode_id"] for row in new_rows(out, week, "reviews") if row["review_type"] == "START"}
+        assert starters
+        assert starts <= starters

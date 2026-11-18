@@ -1,7 +1,7 @@
 from collections import defaultdict
 from datetime import timedelta
 
-from extract_generator.history import draw_age, home_district, later_scores, review_row
+from extract_generator.history import INTERVENTION_TYPES, draw_age, home_district, later_scores, review_row
 from extract_generator.reference import (
     REFERRAL_SOURCE_SHARES,
     SERVICE_SHARES,
@@ -16,6 +16,9 @@ RETURNING_CLIENTS = 10
 TRIAGED = 20
 DISCHARGED = 25
 DECLINED = 3
+ENDED = 40
+NEW_INTERVENTIONS = 60
+NEW_REVIEWS = 100
 
 
 class Week:
@@ -29,6 +32,11 @@ class Week:
         self.days = [previous_cutoff + timedelta(days=n) for n in range(1, (cutoff - previous_cutoff).days + 1)]
         self.touched = {table: set() for table in TABLES}
         self.new = {table: set() for table in TABLES}
+        # Children by episode, built once: scanning every row per lookup made a week take seconds.
+        self.kids = {"interventions": defaultdict(list), "reviews": defaultdict(list)}
+        for table, kids in self.kids.items():
+            for key in sorted(state.table(table)):
+                kids[state.table(table)[key]["episode_id"]].append(key)
 
     def day(self):
         return self.rng.choice(self.days)
@@ -37,6 +45,8 @@ class Week:
         self.state.table(table)[key] = row
         self.touched[table].add(key)
         self.new[table].add(key)
+        if table in self.kids:
+            self.kids[table][row["episode_id"]].append(key)
 
     def change(self, table, key, day, **values):
         row = self.state.table(table)[key]
@@ -45,7 +55,7 @@ class Week:
         self.touched[table].add(key)
 
     def children(self, table, episode_id):
-        rows = [row for _, row in sorted(self.state.table(table).items()) if row["episode_id"] == episode_id]
+        rows = [self.state.table(table)[key] for key in self.kids[table][episode_id]]
         return sorted(rows, key=lambda row: row["start_date" if table == "interventions" else "review_date"])
 
     def open_episodes(self):
@@ -122,25 +132,30 @@ class Week:
             day = self.day()
             self.change("episodes", key, day, triage_date=day)
 
-    def exit_review(self, episode_id, day):
+    def new_review(self, episode_id, kind, day):
         reviews = self.children("reviews", episode_id)
-        if not reviews:
-            # An EXIT with no START before it would break the review pattern.
-            return
-        last = reviews[-1]
-        days_used = last["days_used_last_28"] if last["days_used_last_28"] is not None else self.rng.randint(10, 28)
-        quality = last["quality_of_life"] if last["quality_of_life"] is not None else self.rng.randint(4, 12)
-        review = review_row(self.rng, "EXIT", day, *later_scores(self.rng, days_used, quality))
+        if reviews:
+            last = reviews[-1]
+            days_used = last["days_used_last_28"] if last["days_used_last_28"] is not None else self.rng.randint(10, 28)
+            quality = last["quality_of_life"] if last["quality_of_life"] is not None else self.rng.randint(4, 12)
+            scores = later_scores(self.rng, days_used, quality)
+        else:
+            scores = (self.rng.randint(10, 28), self.rng.randint(4, 12))
+        review = review_row(self.rng, kind, day, *scores)
         review_id = self.state.allocators["reviews"].new_id()
         review.update(review_id=review_id, episode_id=episode_id, last_modified_at=stamp(self.rng, day))
         self.add("reviews", review_id, review)
 
+    def exit_review(self, episode_id, day):
+        # An EXIT with no START before it would break the review pattern.
+        if self.children("reviews", episode_id):
+            self.new_review(episode_id, "EXIT", day)
+
     def discharge(self):
         open_keys = self.open_episodes()
-        treated = {row["episode_id"] for row in self.state.interventions.values()}
-        untreated = [key for key in open_keys if self.state.episodes[key]["triage_date"] and key not in treated]
+        untreated = [key for key in open_keys if self.state.episodes[key]["triage_date"] and not self.kids["interventions"][key]]
         declined = self.rng.sample(untreated, min(DECLINED, len(untreated)))
-        in_treatment = [key for key in open_keys if key in treated]
+        in_treatment = [key for key in open_keys if self.kids["interventions"][key]]
         for key in declined:
             day = self.day()
             self.change("episodes", key, day, discharge_date=day, discharge_reason="DECLINED")
@@ -156,10 +171,63 @@ class Week:
                 self.exit_review(key, day)
 
 
+    def end_interventions(self):
+        pool = [
+            key
+            for episode_id in self.open_episodes()
+            for key in self.kids["interventions"][episode_id]
+            if self.state.interventions[key]["end_date"] is None and key not in self.touched["interventions"]
+        ]
+        wanted = ENDED - len(self.touched["interventions"])
+        for key in self.rng.sample(pool, max(0, min(wanted, len(pool)))):
+            day = self.day()
+            self.change("interventions", key, day, end_date=day)
+
+    def new_interventions(self):
+        pool = [
+            key
+            for key in self.open_episodes()
+            if self.state.episodes[key]["triage_date"] and len(self.children("interventions", key)) < 3
+        ]
+        for key in self.rng.sample(pool, min(NEW_INTERVENTIONS, len(pool))):
+            episode = self.state.episodes[key]
+            existing = self.children("interventions", key)
+            used = {row["intervention_type"] for row in existing}
+            if existing:
+                kind = self.rng.choice([kind for kind in INTERVENTION_TYPES if kind not in used])
+            elif episode["primary_substance"] == "OPIATE" and self.rng.random() < 0.8:
+                kind = "PHARMA"
+            else:
+                kind = "PSYCHO"
+            start = self.day()
+            intervention_id = self.state.allocators["interventions"].new_id()
+            intervention = {
+                "intervention_id": intervention_id,
+                "episode_id": key,
+                "intervention_type": kind,
+                "start_date": start,
+                "end_date": None,
+                "last_modified_at": stamp(self.rng, start),
+            }
+            self.add("interventions", intervention_id, intervention)
+            if not existing:
+                self.new_review(key, "START", self.rng.choice([day for day in self.days if day >= start]))
+
+    def new_reviews(self):
+        reviewed = {self.state.reviews[key]["episode_id"] for key in self.new["reviews"]}
+        pool = [key for key in self.open_episodes() if key not in reviewed and self.children("reviews", key)]
+        wanted = NEW_REVIEWS - len(self.new["reviews"])
+        for key in self.rng.sample(pool, max(0, min(wanted, len(pool)))):
+            self.new_review(key, "REVIEW", self.day())
+
+
 def run_week(state, rng, previous_cutoff, cutoff):
     week = Week(state, rng, previous_cutoff, cutoff)
     week.new_clients()
     week.returning_clients()
     week.triage()
     week.discharge()
+    week.end_interventions()
+    week.new_interventions()
+    week.new_reviews()
     return week.touched, week.new
