@@ -367,6 +367,14 @@ def detect_row_defects(table, row):
     for column in DATE_FIELDS[table]:
         if row[column] and not ISO_DATE.fullmatch(row[column]):
             yield (file_name, key, column, "DATE_FORMAT", row[column])
+    lists = {column: SPEC_CODES[name] for (owner, column), name in CODE_FIELDS.items() if owner == table}
+    if table == "episodes":
+        lists["service_code"] = set(SPEC_SERVICES)
+    for column, codes in sorted(lists.items()):
+        value = row[column]
+        if value and value not in codes:
+            kind = "CODE_CASE" if value.strip().upper() in codes else "CODE_UNKNOWN"
+            yield (file_name, key, column, kind, value)
 
 
 def detect_defects(out, extract_date):

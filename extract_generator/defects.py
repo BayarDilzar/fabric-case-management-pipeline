@@ -31,6 +31,9 @@ HISTORY_PLAN = [
     ("DATE_FORMAT", "episodes", "discharge_date", 15),
     ("DATE_FORMAT", "interventions", "start_date", 15),
     ("DATE_FORMAT", "reviews", "review_date", 15),
+    ("CODE_CASE", "clients", "sex", 10),
+    ("CODE_CASE", "episodes", "referral_source", 15),
+    ("CODE_CASE", "interventions", "intervention_type", 10),
 ]
 # UK day-first order and the NDTMS compact format. Never month-first, which cannot be told apart.
 OTHER_DATE_FORMATS = ["%d/%m/%Y", "%Y%m%d"]
@@ -127,6 +130,12 @@ class Injector:
         clean = row[field]
         row[field] = date.fromisoformat(clean).strftime(self.rng.choice(OTHER_DATE_FORMATS))
         self.record(table, key, field, "DATE_FORMAT", row[field], "CORRECTED", expected=clean)
+
+    def code_case(self, table, field, key):
+        row = self.rows[table][key]
+        code = row[field]
+        row[field] = self.rng.choice([code.lower(), " " + code, code + " "])
+        self.record(table, key, field, "CODE_CASE", row[field], "CORRECTED", expected=code)
 
     def place_inserts(self):
         for table, row, anchor in self.inserts:

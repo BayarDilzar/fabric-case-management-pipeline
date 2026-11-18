@@ -21,6 +21,7 @@ CATALOGUE = {
     "DUP_VERSION": ("REMOVED", ""),
     "MISSING_REQUIRED": ("QUARANTINED", "MISSING_REQUIRED"),
     "DATE_FORMAT": ("CORRECTED", ""),
+    "CODE_CASE": ("CORRECTED", ""),
 }
 HISTORY_COUNTS = {
     ("DUP_EXACT", "clients.csv", ""): 20,
@@ -36,6 +37,9 @@ HISTORY_COUNTS = {
     ("DATE_FORMAT", "episodes.csv", "discharge_date"): 15,
     ("DATE_FORMAT", "interventions.csv", "start_date"): 15,
     ("DATE_FORMAT", "reviews.csv", "review_date"): 15,
+    ("CODE_CASE", "clients.csv", "sex"): 10,
+    ("CODE_CASE", "episodes.csv", "referral_source"): 15,
+    ("CODE_CASE", "interventions.csv", "intervention_type"): 10,
 }
 
 
@@ -124,3 +128,12 @@ def test_date_format_defects_use_both_formats_and_parse_to_the_expected_date(out
     assert {"/" in line["injected_value"] for line in lines} == {True, False}
     for line in lines:
         assert uk_or_compact_date(line["injected_value"]) == line["expected_value"]
+
+
+def test_code_case_defects_correct_to_the_trimmed_upper_case_code(output_for):
+    lines = [line for line in defect_lines(output_for(2026), HISTORY) if line["defect_type"] == "CODE_CASE"]
+
+    assert lines
+    for line in lines:
+        assert line["injected_value"] != line["expected_value"]
+        assert line["injected_value"].strip().upper() == line["expected_value"]
