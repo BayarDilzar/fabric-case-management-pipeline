@@ -364,6 +364,9 @@ def detect_row_defects(table, row):
     for column in REQUIRED[table]:
         if not row[column].strip():
             yield (file_name, key, column, "MISSING_REQUIRED", row[column])
+    for column in DATE_FIELDS[table]:
+        if row[column] and not ISO_DATE.fullmatch(row[column]):
+            yield (file_name, key, column, "DATE_FORMAT", row[column])
 
 
 def detect_defects(out, extract_date):
@@ -400,6 +403,9 @@ def load_extract(out, extract_date, previous):
             elif line["expected_outcome"] == "QUARANTINED":
                 assert len(matches) == 1, line
                 del rows[matches[0]]
+            elif line["expected_outcome"] == "CORRECTED":
+                assert len(matches) == 1 and rows[matches[0]][line["field"]] == line["injected_value"], line
+                rows[matches[0]][line["field"]] = line["expected_value"]
         for row in rows:
             key = row[KEYS[table]]
             loaded = view[table].get(key)

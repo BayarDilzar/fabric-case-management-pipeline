@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from extract_generator.reference import KEYS
 from extract_generator.state import TABLES
@@ -27,7 +27,13 @@ HISTORY_PLAN = [
     ("MISSING_REQUIRED", "episodes", "referral_date", 8),
     ("MISSING_REQUIRED", "interventions", "start_date", 10),
     ("MISSING_REQUIRED", "reviews", "review_date", 12),
+    ("DATE_FORMAT", "episodes", "referral_date", 15),
+    ("DATE_FORMAT", "episodes", "discharge_date", 15),
+    ("DATE_FORMAT", "interventions", "start_date", 15),
+    ("DATE_FORMAT", "reviews", "review_date", 15),
 ]
+# UK day-first order and the NDTMS compact format. Never month-first, which cannot be told apart.
+OTHER_DATE_FORMATS = ["%d/%m/%Y", "%Y%m%d"]
 # The fields an older version did not have yet.
 LATER_FIELDS = {"episodes": ["discharge_date", "discharge_reason"], "interventions": ["end_date"]}
 TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -53,7 +59,7 @@ class Injector:
             pool = [
                 key
                 for key in sorted(self.rows[table])
-                if key not in self.used[table] and self.eligible(defect_type, table, self.rows[table][key])
+                if key not in self.used[table] and self.eligible(defect_type, table, self.rows[table][key], field)
             ]
             for key in self.rng.sample(pool, min(count, len(pool))):
                 # One defect per row, so a test can tell which check should catch it.
@@ -67,8 +73,10 @@ class Injector:
         is_leaf = table != "episodes" or key not in self.parents
         return key in self.new_keys[table] and is_leaf
 
-    def eligible(self, defect_type, table, row):
+    def eligible(self, defect_type, table, row, field):
         key = row[KEYS[table]]
+        if defect_type == "DATE_FORMAT":
+            return bool(row[field])
         if defect_type == "MISSING_REQUIRED":
             return self.rejectable(table, key)
         if defect_type == "DUP_VERSION":
@@ -113,6 +121,12 @@ class Injector:
     def missing_required(self, table, field, key):
         self.rows[table][key][field] = ""
         self.record(table, key, field, "MISSING_REQUIRED", "", "QUARANTINED", reason="MISSING_REQUIRED")
+
+    def date_format(self, table, field, key):
+        row = self.rows[table][key]
+        clean = row[field]
+        row[field] = date.fromisoformat(clean).strftime(self.rng.choice(OTHER_DATE_FORMATS))
+        self.record(table, key, field, "DATE_FORMAT", row[field], "CORRECTED", expected=clean)
 
     def place_inserts(self):
         for table, row, anchor in self.inserts:

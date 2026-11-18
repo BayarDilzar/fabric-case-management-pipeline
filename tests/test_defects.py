@@ -1,4 +1,5 @@
 from collections import Counter
+from datetime import date
 
 import pytest
 
@@ -19,6 +20,7 @@ CATALOGUE = {
     "DUP_EXACT": ("REMOVED", ""),
     "DUP_VERSION": ("REMOVED", ""),
     "MISSING_REQUIRED": ("QUARANTINED", "MISSING_REQUIRED"),
+    "DATE_FORMAT": ("CORRECTED", ""),
 }
 HISTORY_COUNTS = {
     ("DUP_EXACT", "clients.csv", ""): 20,
@@ -30,6 +32,10 @@ HISTORY_COUNTS = {
     ("MISSING_REQUIRED", "episodes.csv", "referral_date"): 8,
     ("MISSING_REQUIRED", "interventions.csv", "start_date"): 10,
     ("MISSING_REQUIRED", "reviews.csv", "review_date"): 12,
+    ("DATE_FORMAT", "episodes.csv", "referral_date"): 15,
+    ("DATE_FORMAT", "episodes.csv", "discharge_date"): 15,
+    ("DATE_FORMAT", "interventions.csv", "start_date"): 15,
+    ("DATE_FORMAT", "reviews.csv", "review_date"): 15,
 }
 
 
@@ -102,3 +108,19 @@ def test_quarantined_episodes_have_no_intervention_or_review_rows(seed, output_f
 
     assert rejected
     assert not rejected & parents
+
+
+def uk_or_compact_date(value):
+    if "/" in value:
+        day, month, year = value.split("/")
+    else:
+        year, month, day = value[:4], value[4:6], value[6:]
+    return date(int(year), int(month), int(day)).isoformat()
+
+
+def test_date_format_defects_use_both_formats_and_parse_to_the_expected_date(output_for):
+    lines = [line for line in defect_lines(output_for(2026), HISTORY) if line["defect_type"] == "DATE_FORMAT"]
+
+    assert {"/" in line["injected_value"] for line in lines} == {True, False}
+    for line in lines:
+        assert uk_or_compact_date(line["injected_value"]) == line["expected_value"]
