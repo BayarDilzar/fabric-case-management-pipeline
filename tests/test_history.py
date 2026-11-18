@@ -28,7 +28,7 @@ def test_history_has_2000_clients_split_1500_400_100_by_episode_count(history):
     assert sorted(Counter(per_client.values()).items()) == [(1, 1500), (2, 400), (3, 100)]
 
 
-def test_history_clients_and_episodes_obey_the_rules(history):
+def test_history_obeys_every_rule(history):
     assert check_rules(history, HISTORY_CUTOFF) == []
 
 

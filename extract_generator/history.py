@@ -11,7 +11,7 @@ from extract_generator.reference import (
     SUBSTANCE_SHARES,
     TREATED_DISCHARGE_SHARES,
 )
-from extract_generator.state import State, weighted
+from extract_generator.state import State, stamp, weighted
 
 CUTOFF = CUTOFFS[0]
 EPISODE_COUNTS = [1] * 1500 + [2] * 400 + [3] * 100
@@ -156,6 +156,10 @@ def new_reviews(rng, episode):
     return rows
 
 
+def latest_day(row, columns):
+    return max(row[column] for column in columns if row[column])
+
+
 def build_history(rng):
     counts = list(EPISODE_COUNTS)
     rng.shuffle(counts)
@@ -167,7 +171,7 @@ def build_history(rng):
             "birth_year": dates[0].year - draw_age(rng),
             "sex": weighted(rng, SEX_SHARES),
             "local_authority_code": home_district(rng, service),
-            "last_modified_at": None,
+            "last_modified_at": stamp(rng, dates[0]),
             "_first_referral": dates[0],
             "_service": service,
         }
@@ -175,10 +179,16 @@ def build_history(rng):
         for i, referral in enumerate(dates):
             must_close_by = dates[i + 1] - timedelta(days=1) if i + 1 < count else None
             episode = new_episode(rng, service, referral, must_close_by)
+            episode["last_modified_at"] = stamp(
+                rng, latest_day(episode, ["referral_date", "triage_date", "discharge_date"])
+            )
             episode["_client"] = client
             episodes.append(episode)
-            interventions.extend(new_interventions(rng, episode))
+            for intervention in new_interventions(rng, episode):
+                intervention["last_modified_at"] = stamp(rng, latest_day(intervention, ["start_date", "end_date"]))
+                interventions.append(intervention)
             for review in new_reviews(rng, episode):
+                review["last_modified_at"] = stamp(rng, review["review_date"])
                 review["_episode"] = episode
                 reviews.append(review)
 

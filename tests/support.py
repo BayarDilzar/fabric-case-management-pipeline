@@ -1,7 +1,8 @@
 """Test helpers. Expected values come from the spec, not from the generator."""
 
+import re
 from collections import defaultdict
-from datetime import date
+from datetime import date, datetime, time
 
 SPEC_SERVICES = {
     "S01": "E06000009",
@@ -11,6 +12,47 @@ SPEC_SERVICES = {
     "S05": "E09000023",
     "S06": "E06000052",
 }
+
+
+SPEC_CODES = {
+    "sex": {"F", "M", "U"},
+    "referral_source": {"SELF", "GP", "HEALTH", "CJS", "FAMILY"},
+    "substance": {"OPIATE", "CRACK", "COCAINE", "ALCOHOL", "CANNABIS", "OTHER"},
+    "intervention_type": {"PHARMA", "PSYCHO", "RECOVERY"},
+    "discharge_reason": {"COMPLETED", "TRANSFERRED", "DROPPED_OUT", "DECLINED", "DIED"},
+    "review_type": {"START", "REVIEW", "EXIT"},
+}
+CODE_FIELDS = {
+    ("clients", "sex"): "sex",
+    ("episodes", "referral_source"): "referral_source",
+    ("episodes", "primary_substance"): "substance",
+    ("episodes", "discharge_reason"): "discharge_reason",
+    ("interventions", "intervention_type"): "intervention_type",
+    ("reviews", "review_type"): "review_type",
+}
+REQUIRED = {
+    "clients": ["client_id", "birth_year", "sex", "last_modified_at"],
+    "episodes": [
+        "episode_id",
+        "client_id",
+        "service_code",
+        "referral_date",
+        "referral_source",
+        "primary_substance",
+        "last_modified_at",
+    ],
+    "interventions": ["intervention_id", "episode_id", "intervention_type", "start_date", "last_modified_at"],
+    "reviews": ["review_id", "episode_id", "review_date", "review_type", "last_modified_at"],
+}
+DATE_FIELDS = {
+    "clients": [],
+    "episodes": ["referral_date", "triage_date", "discharge_date"],
+    "interventions": ["start_date", "end_date"],
+    "reviews": ["review_date"],
+}
+TABLES = ("clients", "episodes", "interventions", "reviews")
+ISO_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}")
 
 
 def as_date(value):
@@ -178,7 +220,60 @@ def rule_treatment_matches_discharge_reason(view, cutoff):
             yield f"TREATMENT {key}: more than three interventions"
 
 
+def rule_r04_codes_in_lists(view, cutoff):
+    for (table, column), list_name in sorted(CODE_FIELDS.items()):
+        for key in sorted(view[table]):
+            value = view[table][key][column]
+            if value and value not in SPEC_CODES[list_name]:
+                yield f"R04 {key}: {column} {value!r} not in {list_name}"
+    for key in sorted(view["clients"]):
+        district = view["clients"][key]["local_authority_code"]
+        if district and district not in SPEC_SERVICES.values():
+            yield f"R04 {key}: district {district!r} not served"
+
+
+def rule_r05_required_fields(view, cutoff):
+    for table in TABLES:
+        for key in sorted(view[table]):
+            for column in REQUIRED[table]:
+                if not view[table][key][column].strip():
+                    yield f"R05 {key}: {column} empty"
+
+
+def rule_r06_r10_dates(view, cutoff):
+    for table in TABLES:
+        for key in sorted(view[table]):
+            for column in DATE_FIELDS[table]:
+                value = view[table][key][column]
+                if not value:
+                    continue
+                if not ISO_DATE.fullmatch(value):
+                    yield f"R06 {key}: {column} {value!r} not YYYY-MM-DD"
+                elif as_date(value) > cutoff:
+                    yield f"R10 {key}: {column} after the cut-off"
+
+
+def rule_r16_last_modified(view, cutoff):
+    latest = datetime.combine(cutoff, time(23, 59, 59))
+    for table in TABLES:
+        for key in sorted(view[table]):
+            row = view[table][key]
+            if not TIMESTAMP.fullmatch(row["last_modified_at"]):
+                yield f"R16 {key}: last_modified_at {row['last_modified_at']!r} not a timestamp"
+                continue
+            modified = datetime.fromisoformat(row["last_modified_at"])
+            if modified > latest:
+                yield f"R16 {key}: modified after the cut-off"
+            for column in DATE_FIELDS[table]:
+                if row[column] and ISO_DATE.fullmatch(row[column]) and modified.date() < as_date(row[column]):
+                    yield f"R16 {key}: modified before its {column}"
+
+
 RULES = [
+    rule_r04_codes_in_lists,
+    rule_r05_required_fields,
+    rule_r06_r10_dates,
+    rule_r16_last_modified,
     rule_r02_episode_parents,
     rule_r03_intervention_and_review_parents,
     rule_r08_end_after_start,
