@@ -92,10 +92,11 @@ def children(view, table):
     return grouped
 
 
-def rule_r03_intervention_parent(view, cutoff):
-    for key in sorted(view["interventions"]):
-        if view["interventions"][key]["episode_id"] not in view["episodes"]:
-            yield f"R03 {key}: episode missing"
+def rule_r03_intervention_and_review_parents(view, cutoff):
+    for table in ("interventions", "reviews"):
+        for key in sorted(view[table]):
+            if view[table][key]["episode_id"] not in view["episodes"]:
+                yield f"R03 {key}: episode missing"
 
 
 def rule_r08_end_after_start(view, cutoff):
@@ -120,6 +121,48 @@ def rule_r12_interventions_inside_episode(view, cutoff):
             yield f"R12 {key}: ends after its episode"
 
 
+def rule_r09_score_ranges(view, cutoff):
+    for key in sorted(view["reviews"]):
+        row = view["reviews"][key]
+        if row["days_used_last_28"] and not 0 <= int(row["days_used_last_28"]) <= 28:
+            yield f"R09 {key}: days_used_last_28 out of range"
+        if row["quality_of_life"] and not 0 <= int(row["quality_of_life"]) <= 20:
+            yield f"R09 {key}: quality_of_life out of range"
+
+
+def rule_r12_reviews_inside_episode(view, cutoff):
+    for key in sorted(view["reviews"]):
+        row = view["reviews"][key]
+        episode = view["episodes"].get(row["episode_id"])
+        if episode is None:
+            continue
+        last_day = as_date(episode["discharge_date"]) or cutoff
+        if not as_date(episode["referral_date"]) <= as_date(row["review_date"]) <= last_day:
+            yield f"R12 {key}: review outside its episode"
+
+
+def rule_review_pattern(view, cutoff):
+    # START opens the reviews, EXIT closes a completed or transferred episode on its discharge day.
+    treated = children(view, "interventions")
+    for episode_id, rows in sorted(children(view, "reviews").items()):
+        episode = view["episodes"].get(episode_id)
+        if episode is None:
+            continue
+        rows = sorted(rows, key=lambda row: (row["review_date"], row["review_id"]))
+        kinds = [row["review_type"] for row in rows]
+        if not treated[episode_id]:
+            yield f"REVIEWS {episode_id}: reviews without treatment"
+        if kinds[0] != "START" or kinds.count("START") != 1:
+            yield f"REVIEWS {episode_id}: START is not the single first review"
+        if "EXIT" in kinds:
+            if kinds[-1] != "EXIT" or kinds.count("EXIT") != 1:
+                yield f"REVIEWS {episode_id}: EXIT is not the single last review"
+            if episode["discharge_reason"] not in ("COMPLETED", "TRANSFERRED"):
+                yield f"REVIEWS {episode_id}: EXIT after {episode['discharge_reason'] or 'no discharge'}"
+            elif rows[-1]["review_date"] != episode["discharge_date"]:
+                yield f"REVIEWS {episode_id}: EXIT not on the discharge date"
+
+
 def rule_treatment_matches_discharge_reason(view, cutoff):
     # DECLINED means the client never started treatment; any other closure means they did.
     treated = children(view, "interventions")
@@ -137,9 +180,12 @@ def rule_treatment_matches_discharge_reason(view, cutoff):
 
 RULES = [
     rule_r02_episode_parents,
-    rule_r03_intervention_parent,
+    rule_r03_intervention_and_review_parents,
     rule_r08_end_after_start,
+    rule_r09_score_ranges,
     rule_r12_interventions_inside_episode,
+    rule_r12_reviews_inside_episode,
+    rule_review_pattern,
     rule_treatment_matches_discharge_reason,
     rule_r07_discharge_after_referral,
     rule_r11_triage_after_referral,

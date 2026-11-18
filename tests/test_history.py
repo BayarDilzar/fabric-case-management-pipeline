@@ -72,3 +72,16 @@ def test_history_treated_episodes_have_one_to_three_interventions_in_spec_shares
     assert abs(shares[1] / treated - 0.50) < 0.04
     assert abs(shares[2] / treated - 0.35) < 0.04
     assert abs(shares[3] / treated - 0.15) < 0.04
+
+
+def test_history_reviews_have_some_missing_scores_and_use_falls_by_exit(history):
+    reviews = list(history["reviews"].values())
+
+    def mean_days(kind):
+        values = [int(r["days_used_last_28"]) for r in reviews if r["review_type"] == kind and r["days_used_last_28"]]
+        return sum(values) / len(values)
+
+    assert 5000 < len(reviews) < 7000
+    assert abs(share(reviews, lambda r: r["days_used_last_28"] == "") - 0.08) < 0.02
+    assert abs(share(reviews, lambda r: r["quality_of_life"] == "") - 0.08) < 0.02
+    assert mean_days("EXIT") < mean_days("START")
