@@ -333,9 +333,25 @@ def rule_six_monthly_reviews(view, cutoff):
                 yield f"CADENCE {later['review_id']}: {gap} days after the previous review"
 
 
+def rule_treatment_gets_a_start_review(view, cutoff):
+    # A START comes within 14 days of the first treatment, so only treatment that is very recent,
+    # or that ended within 14 days, may lack one.
+    reviewed = children(view, "reviews")
+    for episode_id, rows in sorted(children(view, "interventions").items()):
+        first = min(as_date(row["start_date"]) for row in rows)
+        last_day = as_date(view["episodes"][episode_id]["discharge_date"]) or cutoff
+        if (last_day - first).days > 14 and not reviewed[episode_id]:
+            yield f"START {episode_id}: treated since {first} with no START review"
+
+
 # How clean source data is shaped. Silver can break these legitimately: a quarantined
 # intervention leaves its episode looking untreated.
-SHAPE_RULES = [rule_review_pattern, rule_treatment_matches_discharge_reason, rule_six_monthly_reviews]
+SHAPE_RULES = [
+    rule_review_pattern,
+    rule_treatment_matches_discharge_reason,
+    rule_six_monthly_reviews,
+    rule_treatment_gets_a_start_review,
+]
 
 
 def check_rules(view, cutoff):

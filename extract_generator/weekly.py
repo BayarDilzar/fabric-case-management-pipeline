@@ -227,7 +227,12 @@ class Week:
         reviewed = {self.state.reviews[key]["episode_id"] for key in self.new["reviews"]}
         for key in self.open_episodes():
             reviews = self.children("reviews", key)
-            if key in reviewed or not reviews:
+            if key in reviewed:
+                continue
+            if not reviews:
+                # Treatment that began just before a cut-off may still be waiting for its START.
+                if self.kids["interventions"][key]:
+                    self.new_review(key, "START", self.day())
                 continue
             due = reviews[-1]["review_date"] + REVIEW_INTERVAL
             if due in self.days:

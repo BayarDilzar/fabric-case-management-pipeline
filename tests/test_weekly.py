@@ -160,10 +160,13 @@ def test_each_week_ends_40_interventions_and_adds_60(built):
 def test_first_treatment_in_a_week_comes_with_its_start_review(built):
     for before, after in source_weeks(built):
         treated_before = {row["episode_id"] for row in before["interventions"].values()}
+        reviewed_before = {row["episode_id"] for row in before["reviews"].values()}
         starters = {row["episode_id"] for row in created(before, after, "interventions")} - treated_before
         starts = {row["episode_id"] for row in created(before, after, "reviews") if row["review_type"] == "START"}
         assert starters
-        assert starts == starters
+        assert starters <= starts
+        # Any other START catches up on treatment that began before the week without one.
+        assert starts - starters <= treated_before - reviewed_before
 
 
 def test_each_week_corrects_5_clients_and_3_review_scores(built):
