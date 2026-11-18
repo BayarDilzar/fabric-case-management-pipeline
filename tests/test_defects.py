@@ -12,6 +12,7 @@ from tests.support import (
     extract_dates,
     listed_defects,
     read_csv,
+    silver_by_date,
     silver_views,
 )
 
@@ -29,6 +30,7 @@ CATALOGUE = {
     "RULE_END_BEFORE_START": ("QUARANTINED", "RULE_R08"),
     "RULE_DAYS_RANGE": ("QUARANTINED", "RULE_R09"),
     "RULE_FUTURE_DATE": ("QUARANTINED", "RULE_R10"),
+    "RESENT_UNCHANGED": ("UNCHANGED", ""),
 }
 HISTORY_COUNTS = {
     ("DUP_EXACT", "clients.csv", ""): 20,
@@ -204,7 +206,7 @@ def test_each_week_carries_the_spec_defect_counts_and_its_own_rule_break(seed, o
     out = output_for(seed)
 
     for week, rule in WEEK_RULES.items():
-        counts = Counter(line["defect_type"] for line in defect_lines(out, week))
+        counts = Counter(line["defect_type"] for line in defect_lines(out, week) if line["defect_type"] != "RESENT_UNCHANGED")
         assert counts == {
             "DUP_EXACT": 3,
             "DUP_VERSION": 1,
@@ -215,3 +217,20 @@ def test_each_week_carries_the_spec_defect_counts_and_its_own_rule_break(seed, o
             "ORPHAN": 2,
             rule: 1,
         }
+
+
+@pytest.mark.parametrize("seed", SEEDS)
+def test_week_two_resends_five_reviews_exactly_as_silver_already_holds_them(seed, output_for):
+    out = output_for(seed)
+    before = silver_by_date(out)["2026-11-01"]
+    _, rows = read_csv(out / "extracts" / "2026-11-08" / "reviews.csv")
+
+    resent = [line for line in defect_lines(out, "2026-11-08") if line["defect_type"] == "RESENT_UNCHANGED"]
+
+    assert len(resent) == 5
+    for line in resent:
+        (row,) = [row for row in rows if row["review_id"] == line["record_key"]]
+        assert line["file_name"] == "reviews.csv"
+        assert row == before["reviews"][line["record_key"]]
+    for week in ("2026-11-01", "2026-11-15"):
+        assert not [line for line in defect_lines(out, week) if line["defect_type"] == "RESENT_UNCHANGED"]

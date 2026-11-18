@@ -90,6 +90,8 @@ def week_plan(number):
         + one("CODE_UNKNOWN")
         + all_but_one("ORPHAN")
         + [(*WEEK_RULES[turn], 1)]
+        # The source's overlap window sends some rows again; a merge must leave them alone.
+        + ([("RESENT_UNCHANGED", "reviews", "", 5)] if number == 2 else [])
     )
 
 
@@ -103,6 +105,7 @@ class Injector:
 
     def __init__(self, extract, rng, state, new_keys, weekly):
         self.files = extract.files
+        self.snapshot = extract.snapshot
         self.new_keys = new_keys
         self.weekly = weekly
         self.state = state
@@ -117,6 +120,9 @@ class Injector:
 
     def run(self, plan):
         for defect_type, table, field, count in plan:
+            if defect_type == "RESENT_UNCHANGED":
+                self.resend(table, count)
+                continue
             pool = [
                 key
                 for key in sorted(self.rows[table])
@@ -240,6 +246,17 @@ class Injector:
     def rule_future_date(self, table, field, key):
         cutoff = self.cutoff.isoformat()
         self.shift(table, key, field, cutoff, self.rng.randint(1, 90), "RULE_FUTURE_DATE", "RULE_R10")
+
+    def resend(self, table, count):
+        # Untouched rows outside frozen episodes are exactly what Silver already holds.
+        pool = [
+            key
+            for key in sorted(self.snapshot[table])
+            if key not in self.rows[table] and self.snapshot[table][key]["episode_id"] not in self.state.frozen_episodes
+        ]
+        for key in self.rng.sample(pool, min(count, len(pool))):
+            self.inserts.append((table, dict(self.snapshot[table][key]), None))
+            self.record(table, key, "", "RESENT_UNCHANGED", "", "UNCHANGED")
 
     def place_inserts(self):
         for table, row, anchor in self.inserts:

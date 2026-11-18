@@ -336,9 +336,11 @@ def defect_lines(out, extract_date):
 
 
 def listed_defects(out, extract_date):
+    # A re-sent unchanged row is a test case, not a defect: no check should flag it.
     return {
         (line["file_name"], line["record_key"], line["field"], line["defect_type"], line["injected_value"])
         for line in defect_lines(out, extract_date)
+        if line["defect_type"] != "RESENT_UNCHANGED"
     }
 
 
