@@ -66,3 +66,12 @@ def test_output_files_have_no_carriage_returns_or_byte_order_marks(output_for):
     for path, content in all_files(output_for(2026)).items():
         assert b"\r" not in content, path
         assert not content.startswith(b"\xef\xbb\xbf"), path
+
+
+def test_cli_defaults_to_seed_2026_and_an_output_folder(tmp_path):
+    env = dict(os.environ, PYTHONPATH=str(REPO))
+
+    subprocess.run([sys.executable, "-m", "extract_generator"], cwd=tmp_path, env=env, check=True)
+
+    _, rows = read_csv(tmp_path / "output" / "manifests" / "2026-10-25" / "files.csv")
+    assert {row["seed"] for row in rows} == {"2026"}
