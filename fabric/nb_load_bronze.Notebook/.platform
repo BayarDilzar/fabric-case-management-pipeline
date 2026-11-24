@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "nb_load_bronze",
+    "description": "Loads one landed extract into the Bronze tables as text, with load columns."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "4a0ad3a1-a233-a81e-478b-1a999da115e6"
+  }
+}
