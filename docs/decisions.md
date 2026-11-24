@@ -43,3 +43,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** The workspace syncs with the main branch, in the fabric/ folder.
 - **Alternatives:** The root of the repo.
 - **Reason:** Fabric item definitions stay apart from the generator code, tests and docs.
+
+## Reference files and manifest in Bronze
+
+- **Decision:** Every load also reloads the two reference files and the reference manifest, tagged with the extract identifier reference. The manifest loads into test_manifest_files and test_manifest_defects.
+- **Alternatives:** A separate run for the reference files. Tagging the reference rows with each extract date.
+- **Reason:** One run then fills every Bronze table. Replace-by-extract keeps one copy of the reference data, which matches the generator writing it once. The test_ prefix marks the manifest as test reference data, not source data.
