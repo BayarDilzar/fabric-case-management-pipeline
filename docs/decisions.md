@@ -37,3 +37,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** Bronze keeps every extract. Loading an extract replaces only the rows with that _extract_id, using a Delta replaceWhere write.
 - **Alternatives:** Append on every run. Overwrite the whole table. Merge on the record key.
 - **Reason:** A rerun gives the same rows and never touches other extracts. Appending would duplicate rows on a rerun. Overwriting would lose earlier extracts. A merge on the key cannot work, because Bronze holds duplicate keys on purpose.
+
+## Git folder fabric/
+
+- **Decision:** The workspace syncs with the main branch, in the fabric/ folder.
+- **Alternatives:** The root of the repo.
+- **Reason:** Fabric item definitions stay apart from the generator code, tests and docs.
