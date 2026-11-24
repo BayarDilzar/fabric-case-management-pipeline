@@ -73,3 +73,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** When a client is quarantined, its episodes are quarantined too, and when an episode is quarantined, so are its interventions and reviews. Each child gets its own rule: DQ_EPI_CLIENT_QUARANTINED, DQ_INT_EPISODE_QUARANTINED or DQ_REV_EPISODE_QUARANTINED.
 - **Alternatives:** Leave the children in Silver. Treat them as orphans.
 - **Reason:** A child left in Silver would point at a parent that is not there, so joins would drop it without a trace. It is not an orphan, because its parent exists in Bronze, so its own rule says why it was held back. The test data puts row-rejecting defects only on rows without children (generator decision D2), so the first extract has no cascades and these rules find 0 rows.
+
+## Full rebuild in M2, merge in M3
+
+- **Decision:** nb_load_silver rebuilds every Silver table from one extract's Bronze rows and overwrites it. Every write goes through one function, so M3 can replace the Silver overwrite with a merge on the business key.
+- **Alternatives:** Build the merge now.
+- **Reason:** M2 has one extract, so a rebuild gives the same result as a merge with less code, and a rerun is simple. The weekly extracts that need a merge arrive in M3.
