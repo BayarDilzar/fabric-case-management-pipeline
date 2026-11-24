@@ -61,3 +61,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** dq.rule_results, dq.quarantine and dq.reconciliation sit in a dq schema in lh_silver, apart from the Silver tables in dbo. Rule results and reconciliation gain rows on every run, so runs can be compared.
 - **Alternatives:** The dbo schema with a dq_ prefix. A separate lakehouse for data quality.
 - **Reason:** The schema keeps the two kinds of table apart, while one notebook writes both and one SQL endpoint reads both. A separate lakehouse would mean a second lakehouse for nb_load_silver to write to.
+
+## One quarantine table with the original row as JSON
+
+- **Decision:** Rejected rows from all four source tables go into dq.quarantine, one row per rejected record. Each row holds the run id, extract id, source table, business key, every rule id the record failed, a reason, and the original Bronze row as JSON, with empty fields kept as null. A rebuild replaces that extract's quarantine rows.
+- **Alternatives:** One quarantine table per source table, with the source columns. The key and reason only, with no copy of the row.
+- **Reason:** One table gives one place to look and the same columns for every source, so a new source needs no new table. The JSON keeps the row exactly as received, whatever its columns. Without a copy, checking a rejected row would mean finding it again in Bronze. Replacing by extract means a rerun does not list the same record twice.
