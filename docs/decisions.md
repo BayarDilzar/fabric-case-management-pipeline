@@ -55,3 +55,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** Silver fixes a value only when there is one right answer: spaces are trimmed, codes are upper-cased, and dates written as DD/MM/YYYY or YYYYMMDD are read as dates. It removes extra rows with the same business key, keeping the row with the latest last_modified_at. It quarantines a row that has an empty required field, an unreadable value, an invalid code or a missing parent, breaks a business rule, or belongs to a quarantined parent. Each check is a rule with its own id and the action fixed, removed or quarantined.
 - **Alternatives:** Quarantine every row with any defect. Guess a fix for unknown codes, for example HEROIN to OPIATE. Keep every row in Silver with a flag.
 - **Reason:** No value in Silver is guessed. Quarantining fixable rows would hold back 95 good values in the first extract. A flag would leave every report to filter out bad rows itself.
+
+## Data quality tables in a dq schema
+
+- **Decision:** dq.rule_results, dq.quarantine and dq.reconciliation sit in a dq schema in lh_silver, apart from the Silver tables in dbo. Rule results and reconciliation gain rows on every run, so runs can be compared.
+- **Alternatives:** The dbo schema with a dq_ prefix. A separate lakehouse for data quality.
+- **Reason:** The schema keeps the two kinds of table apart, while one notebook writes both and one SQL endpoint reads both. A separate lakehouse would mean a second lakehouse for nb_load_silver to write to.
