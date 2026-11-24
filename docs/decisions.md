@@ -67,3 +67,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** Rejected rows from all four source tables go into dq.quarantine, one row per rejected record. Each row holds the run id, extract id, source table, business key, every rule id the record failed, a reason, and the original Bronze row as JSON, with empty fields kept as null. A rebuild replaces that extract's quarantine rows.
 - **Alternatives:** One quarantine table per source table, with the source columns. The key and reason only, with no copy of the row.
 - **Reason:** One table gives one place to look and the same columns for every source, so a new source needs no new table. The JSON keeps the row exactly as received, whatever its columns. Without a copy, checking a rejected row would mean finding it again in Bronze. Replacing by extract means a rerun does not list the same record twice.
+
+## Cascading quarantine of child records
+
+- **Decision:** When a client is quarantined, its episodes are quarantined too, and when an episode is quarantined, so are its interventions and reviews. Each child gets its own rule: DQ_EPI_CLIENT_QUARANTINED, DQ_INT_EPISODE_QUARANTINED or DQ_REV_EPISODE_QUARANTINED.
+- **Alternatives:** Leave the children in Silver. Treat them as orphans.
+- **Reason:** A child left in Silver would point at a parent that is not there, so joins would drop it without a trace. It is not an orphan, because its parent exists in Bronze, so its own rule says why it was held back. The test data puts row-rejecting defects only on rows without children (generator decision D2), so the first extract has no cascades and these rules find 0 rows.
