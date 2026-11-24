@@ -31,3 +31,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** Bronze keeps each file exactly as received. Every source column is stored as text, with no cleaning, casting or de-duplication. Each row gets three load columns: _extract_id, _source_file and _loaded_at.
 - **Alternatives:** Cast types on load. Drop or fix bad rows on load.
 - **Reason:** Bad values survive into Bronze, so the M2 checks can find them and the manifest can prove it. Silver can always be rebuilt from Bronze. An empty field is stored as null, which matches the extract rule that an empty string means no value.
+
+## Replace-by-extract reloads
+
+- **Decision:** Bronze keeps every extract. Loading an extract replaces only the rows with that _extract_id, using a Delta replaceWhere write.
+- **Alternatives:** Append on every run. Overwrite the whole table. Merge on the record key.
+- **Reason:** A rerun gives the same rows and never touches other extracts. Appending would duplicate rows on a rerun. Overwriting would lose earlier extracts. A merge on the key cannot work, because Bronze holds duplicate keys on purpose.
