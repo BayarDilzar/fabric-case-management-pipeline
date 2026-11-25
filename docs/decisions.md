@@ -133,3 +133,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** nb_resolve_extract refuses an explicit extract_id when any older landed extract has no Succeeded run, and names those extracts. A rerun of an extract whose older extracts all succeeded is allowed. An explicit extract_id must also be a date.
 - **Alternatives:** A runbook step only, as in M3. Checking quarantined orphans again when their parent arrives later.
 - **Reason:** Loading a newer extract before an older one quarantines its new rows whose parents are in the older one, and loading the older one later does not check them again. Refusing the run is one check in the resolver; checking quarantined rows again would change Silver's checks. Tested with a scratch copy whose run log hid 2026-11-08: 2026-11-15 was refused with a message naming 2026-11-08.
+
+## One pipeline run at a time
+
+- **Decision:** pl_load_extract has its concurrency set to 1. A run started while another is going waits in the queue.
+- **Alternatives:** No limit, relying on Delta conflicts. A lock row in the run log.
+- **Reason:** Two runs at once would load the same extract in parallel; one would fail on a Delta conflict and log Failed although the other succeeded. The pipeline setting needs no code. Tested: a run started 20 seconds after another stayed NotStarted until the first completed. The time in the queue counts in that run's duration_seconds, because a run is timed from its trigger time.
