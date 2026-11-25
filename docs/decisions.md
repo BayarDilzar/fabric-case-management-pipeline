@@ -97,3 +97,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** ops.run_log in lh_silver holds one row per pipeline run: run id, pipeline run id, extract id, trigger type, start and end time, duration, status, failed step, error message, and three counts: the extract's rows in Bronze, the rows in Silver and the extract's quarantined rows. nb_write_run_log writes the row as the last step, on success and on failure. The run id is the pipeline's trigger time in UTC, and nb_load_silver uses the same id in the dq tables.
 - **Alternatives:** The pipeline run history in monitoring. A row written at the start and updated at the end.
 - **Reason:** Monitoring history is not a table, so the resolver cannot read it, and it holds no row counts. A row written once at the end needs no update. A run that stops before its log step, for example when the capacity pauses, leaves no row, so the resolver tries that extract again. The counts are read from the tables, so a failed run shows what it left behind. Fabric is reported to give Manual as the trigger type of scheduled runs too, so a scheduled run may be logged as manual; this cannot be tested while the schedule is off.
+
+## Schema check before writing Bronze
+
+- **Decision:** nb_load_bronze reads the header of every file it is about to load and compares it with the columns in the generator spec. A missing or extra column fails the run, naming the file and the column, before any table is written.
+- **Alternatives:** Let Delta fill a missing column with null. Check only the four extract files. Check in Silver.
+- **Reason:** Spark loads a file with a missing column without complaint, so the broken extract 2026-11-22 would reach Silver with every end_date empty. Checking every file the run reads, the reference files and manifest included, keeps one rule: nothing is written unless everything matches. A check in Silver would come too late, because Bronze would already hold the rows.
