@@ -145,3 +145,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** lh_gold has schemas on and its tables in dbo. fact_episode holds one row per Silver episode with wait days, length of stay, and flags for open, planned completion and seen within the wait threshold. The dimensions are dim_client, dim_service, dim_date, and one per code list a question needs: dim_referral_source, dim_substance and dim_discharge_reason. fact_extract_load holds the data trust figures per extract, and report_settings the reporting date and wait threshold.
 - **Alternatives:** One wide reporting table. Gold as views over Silver. A gold schema inside lh_silver.
 - **Reason:** In a star each question is a count on one fact filtered by one dimension, which is the shape a semantic model expects. Gold is tables, not views, because Direct Lake reads Delta tables. A separate lakehouse follows the one-lakehouse-per-layer decision. Only tables an M4 question needs were built, so the client journey stages in the plan are left out.
+
+## Gold rebuilt in full on every run
+
+- **Decision:** nb_load_gold rebuilds every Gold table from Silver with CREATE OR REPLACE TABLE on every run. It is the last load step of pl_load_extract, with the same log-then-fail branch as the other steps.
+- **Alternatives:** Merge Gold incrementally, as Silver is. Rebuild Gold on its own schedule.
+- **Reason:** Gold is small: 2,683 episodes and 2,090 clients after four extracts, rebuilt in 28 to 73 seconds in test runs. A full rebuild is simpler and always consistent with Silver, and a rerun gives the same tables. CREATE OR REPLACE keeps each table's Delta history. As the last load step, Gold changes only after Bronze and Silver have succeeded.
