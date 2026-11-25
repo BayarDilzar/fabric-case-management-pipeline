@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "nb_resolve_extract",
+    "description": "Returns the extract to load: the one passed in, or the oldest landed extract with no successful run in ops.run_log."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "1b776ccd-6aa0-ba7d-4201-f29c6bc793a7"
+  }
+}
