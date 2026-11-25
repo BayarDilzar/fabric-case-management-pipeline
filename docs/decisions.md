@@ -169,3 +169,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** fact_extract_load takes, for each extract's latest loaded run, the rows loaded, values fixed, rows removed and rows quarantined from dq.reconciliation and dq.rule_results. A run counts as loaded when ops.run_log shows Succeeded, or when it is the run calling nb_load_gold, whose run log row is written after the Gold step.
 - **Alternatives:** Views on the SQL endpoint that read lh_silver directly. Succeeded runs only.
 - **Reason:** The semantic model reads only lh_gold, so the figures must be in Gold. With Succeeded runs only, Gold built inside a run would always miss that run, and a new extract would reach the report one run late. Tested: after the 2026-11-15 run, Gold showed that run as the last successful load.
+
+## Reporting views kept as files and deployed by a script
+
+- **Decision:** Each view in the reporting schema of the lh_gold SQL analytics endpoint is a .sql file in sql/reporting/, named after its view. sql/deploy_views.py deploys them with mssql-python and an Azure CLI token, and finds the endpoint by name. A test checks that each file creates the view it is named after.
+- **Alternatives:** Views created by hand in the portal. A Fabric notebook holding the view text. pyodbc with an ODBC driver.
+- **Reason:** Files keep each view's text in the repo, where it is reviewed with the rest of the code. A notebook would hold a second copy of every view. mssql-python is Microsoft's driver and needs no separate ODBC install; this machine had only the old SQL Server driver, which cannot use Entra tokens. The script stores no server name or ID.
