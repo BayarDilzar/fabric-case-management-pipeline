@@ -1,0 +1,22 @@
+/// The main substance a client wants help with, from the substance code list.
+table Substance
+
+	column 'Substance Code'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: primary_substance
+
+	/// Label of the primary substance.
+	column Substance
+		dataType: string
+		summarizeBy: none
+		sourceColumn: substance_label
+
+	partition Substance = entity
+		mode: directLake
+		source
+			entityName: dim_substance
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_gold'
+

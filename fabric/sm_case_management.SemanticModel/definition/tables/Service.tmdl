@@ -1,0 +1,28 @@
+/// The six community services, one per local authority district.
+table Service
+
+	column 'Service Code'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: service_code
+
+	/// Display name of the service.
+	column Service
+		dataType: string
+		summarizeBy: none
+		sourceColumn: service_name
+
+	/// LAD 2025 code of the district where the service is based.
+	column 'Local Authority Code'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: local_authority_code
+
+	partition Service = entity
+		mode: directLake
+		source
+			entityName: dim_service
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_gold'
+

@@ -1,0 +1,24 @@
+relationship 'Episodes to Client'
+	fromColumn: Episodes.'Client ID'
+	toColumn: Client.'Client ID'
+
+relationship 'Episodes to Service'
+	fromColumn: Episodes.'Service Code'
+	toColumn: Service.'Service Code'
+
+relationship 'Episodes to Date'
+	fromColumn: Episodes.'Referral Date'
+	toColumn: Date.Date
+
+relationship 'Episodes to Referral Source'
+	fromColumn: Episodes.'Referral Source Code'
+	toColumn: 'Referral Source'.'Referral Source Code'
+
+relationship 'Episodes to Substance'
+	fromColumn: Episodes.'Substance Code'
+	toColumn: Substance.'Substance Code'
+
+relationship 'Episodes to Discharge Reason'
+	fromColumn: Episodes.'Discharge Reason Code'
+	toColumn: 'Discharge Reason'.'Discharge Reason Code'
+

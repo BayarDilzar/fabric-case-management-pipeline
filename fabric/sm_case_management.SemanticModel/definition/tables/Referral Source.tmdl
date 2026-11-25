@@ -1,0 +1,22 @@
+/// Who made the referral, from the referral_source code list.
+table 'Referral Source'
+
+	column 'Referral Source Code'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: referral_source
+
+	/// Label of the referral source.
+	column 'Referral Source'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: referral_source_label
+
+	partition 'Referral Source' = entity
+		mode: directLake
+		source
+			entityName: dim_referral_source
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_gold'
+

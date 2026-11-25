@@ -1,0 +1,35 @@
+/// One row per client in Silver.
+table Client
+
+	column 'Client ID'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: client_id
+
+	/// Stated sex, as its label.
+	column Sex
+		dataType: string
+		summarizeBy: none
+		sourceColumn: sex_label
+
+	/// Year of birth. The full date is not held.
+	column 'Birth Year'
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: birth_year
+
+	/// Age band at the client's first referral in Silver. Not known when the client has no episode in Silver.
+	column 'Age Band at First Referral'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: age_band_at_first_referral
+
+	partition Client = entity
+		mode: directLake
+		source
+			entityName: dim_client
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_gold'
+

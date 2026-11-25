@@ -1,0 +1,34 @@
+/// One row: the reporting date and the wait threshold that Gold was built with.
+table 'Report Settings'
+
+	/// Cut-off of the latest loaded extract. Every figure is as of this date, never today.
+	measure 'Reporting Date' = MAX('Report Settings'[Reporting Date Value])
+		formatString: dd mmm yyyy
+		displayFolder: Settings
+
+	/// Days from referral to triage that count as seen within the threshold.
+	measure 'Wait Threshold (days)' = MAX('Report Settings'[Wait Threshold Days])
+		formatString: 0
+		displayFolder: Settings
+
+	column 'Reporting Date Value'
+		dataType: dateTime
+		isHidden
+		formatString: dd mmm yyyy
+		summarizeBy: none
+		sourceColumn: reporting_date
+
+	column 'Wait Threshold Days'
+		dataType: int64
+		isHidden
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: wait_threshold_days
+
+	partition 'Report Settings' = entity
+		mode: directLake
+		source
+			entityName: report_settings
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_gold'
+

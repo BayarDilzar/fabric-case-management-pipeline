@@ -1,0 +1,7 @@
+/// Direct Lake connection to the Gold lakehouse lh_gold. The workspace and lakehouse IDs are filled in at deploy time.
+expression 'DirectLake - lh_gold' =
+		let
+			Source = AzureStorage.DataLake("https://onelake.dfs.fabric.microsoft.com/79583ae2-ec4b-440f-a2e1-673ae384a224/429d9211-4452-441f-9a73-d314301863a4", [HierarchicalNavigation=true])
+		in
+			Source
+

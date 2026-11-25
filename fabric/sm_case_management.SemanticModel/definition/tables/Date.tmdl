@@ -1,0 +1,46 @@
+/// One row per day from the first referral to the reporting date. Related to Episodes by referral date.
+table Date
+	dataCategory: Time
+
+	/// Calendar date.
+	column Date
+		dataType: dateTime
+		isKey
+		formatString: dd mmm yyyy
+		summarizeBy: none
+		sourceColumn: calendar_date
+
+	/// Calendar year.
+	column Year
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: year
+
+	column 'Month Number'
+		dataType: int64
+		isHidden
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: month
+
+	/// First day of the month, for monthly charts.
+	column 'Month Start'
+		dataType: dateTime
+		formatString: mmm yyyy
+		summarizeBy: none
+		sourceColumn: month_start
+
+	/// Year and month written yyyy-MM.
+	column 'Year Month'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: year_month
+
+	partition Date = entity
+		mode: directLake
+		source
+			entityName: dim_date
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_gold'
+

@@ -1,0 +1,28 @@
+/// Why an episode closed, from the discharge_reason code list.
+table 'Discharge Reason'
+
+	column 'Discharge Reason Code'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: discharge_reason
+
+	/// Label of the discharge reason.
+	column 'Discharge Reason'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: discharge_reason_label
+
+	/// True for COMPLETED, the planned completion.
+	column 'Is Planned Completion'
+		dataType: boolean
+		summarizeBy: none
+		sourceColumn: is_planned_completion
+
+	partition 'Discharge Reason' = entity
+		mode: directLake
+		source
+			entityName: dim_discharge_reason
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_gold'
+

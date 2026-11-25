@@ -1,0 +1,128 @@
+/// One row per episode in Silver: one period of treatment for one client at one service, from referral to discharge.
+table Episodes
+
+	/// People with an open episode (no discharge date) on the reporting date. A client never has two open episodes.
+	measure '# People in Treatment' = CALCULATE(DISTINCTCOUNT('Episodes'[Client ID]), 'Episodes'[Is Open] = TRUE())
+		formatString: #,##0
+		displayFolder: Service overview
+
+	/// New referrals. Each episode starts with one referral, so this counts episodes by their referral date.
+	measure '# Referrals' = COUNTROWS('Episodes')
+		formatString: #,##0
+		displayFolder: Service overview
+
+	/// Median days from referral to triage, over triaged episodes only. Episodes not yet triaged have no wait.
+	measure 'Median Wait to Triage (days)' = MEDIAN('Episodes'[Wait Days])
+		formatString: #,##0.0
+		displayFolder: Service overview
+
+	/// Share of triaged episodes seen within the wait threshold in Report Settings (21 days unless changed). A local target, not a national standard.
+	measure 'Seen Within Threshold (%)' =
+			VAR _triaged = CALCULATE(COUNTROWS('Episodes'), NOT ISBLANK('Episodes'[Wait Days]))
+			VAR _seen = CALCULATE(COUNTROWS('Episodes'), 'Episodes'[Is Seen Within Threshold] = TRUE())
+			RETURN DIVIDE(_seen, _triaged)
+		formatString: 0.0%
+		displayFolder: Service overview
+
+	/// Share of discharged episodes that ended as a planned completion (discharge reason COMPLETED). Open episodes are left out.
+	measure 'Planned Completion (%)' =
+			VAR _discharges = CALCULATE(COUNTROWS('Episodes'), 'Episodes'[Is Open] = FALSE())
+			VAR _planned = CALCULATE(COUNTROWS('Episodes'), 'Episodes'[Is Planned Completion] = TRUE())
+			RETURN DIVIDE(_planned, _discharges)
+		formatString: 0.0%
+		displayFolder: Service overview
+
+	/// Share of referrals with this primary substance, out of all referrals in the current filters for every substance.
+	measure 'Share of Referrals (%)' = DIVIDE([# Referrals], CALCULATE([# Referrals], REMOVEFILTERS('Substance')))
+		formatString: 0.0%
+		displayFolder: Service overview
+
+	column 'Episode ID'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: episode_id
+
+	column 'Client ID'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: client_id
+
+	column 'Service Code'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: service_code
+
+	column 'Referral Source Code'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: referral_source
+
+	column 'Substance Code'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: primary_substance
+
+	column 'Discharge Reason Code'
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: discharge_reason
+
+	column 'Referral Date'
+		dataType: dateTime
+		isHidden
+		formatString: dd mmm yyyy
+		summarizeBy: none
+		sourceColumn: referral_date
+
+	/// Date of the first assessment. Empty when not yet triaged.
+	column 'Triage Date'
+		dataType: dateTime
+		formatString: dd mmm yyyy
+		summarizeBy: none
+		sourceColumn: triage_date
+
+	/// Date the episode closed. Empty while it is open.
+	column 'Discharge Date'
+		dataType: dateTime
+		formatString: dd mmm yyyy
+		summarizeBy: none
+		sourceColumn: discharge_date
+
+	/// Days from referral to triage. Empty when not yet triaged.
+	column 'Wait Days'
+		dataType: int64
+		isHidden
+		formatString: 0
+		sourceColumn: wait_days
+
+	/// True when the episode has no discharge date on the reporting date.
+	column 'Is Open'
+		dataType: boolean
+		summarizeBy: none
+		sourceColumn: is_open
+
+	/// True when the episode was discharged with reason COMPLETED.
+	column 'Is Planned Completion'
+		dataType: boolean
+		summarizeBy: none
+		sourceColumn: is_planned_completion
+
+	/// True when triage came within the wait threshold. Empty when not yet triaged.
+	column 'Is Seen Within Threshold'
+		dataType: boolean
+		summarizeBy: none
+		sourceColumn: is_seen_within_threshold
+
+	partition Episodes = entity
+		mode: directLake
+		source
+			entityName: fact_episode
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_gold'
+

@@ -1,0 +1,78 @@
+/// Data trust: one row per loaded extract, from its latest successful run. Counts cover the four source tables.
+table 'Extract Loads'
+
+	/// Rows that arrived in Bronze from the extract's four source files.
+	measure '# Rows Loaded' = SUM('Extract Loads'[Rows Loaded])
+		formatString: #,##0
+		displayFolder: Data quality
+
+	/// Values Silver corrected: spaces trimmed, codes upper-cased, dates read from another format.
+	measure '# Values Fixed' = SUM('Extract Loads'[Values Fixed])
+		formatString: #,##0
+		displayFolder: Data quality
+
+	/// Duplicate rows removed: exact copies and older versions of a record.
+	measure '# Rows Removed' = SUM('Extract Loads'[Rows Removed])
+		formatString: #,##0
+		displayFolder: Data quality
+
+	/// Rows held back in dq.quarantine because they failed a check.
+	measure '# Rows Quarantined' = SUM('Extract Loads'[Rows Quarantined])
+		formatString: #,##0
+		displayFolder: Data quality
+
+	/// Start time in UTC of the newest successful load of any extract.
+	measure 'Last Successful Load' = MAX('Extract Loads'[Run Started At])
+		formatString: dd mmm yyyy hh:nn
+		displayFolder: Data quality
+
+	/// Extract date, which is also its cut-off.
+	column Extract
+		dataType: string
+		summarizeBy: none
+		sourceColumn: extract_id
+
+	/// Run that last loaded the extract, named by its start time in UTC.
+	column 'Run ID'
+		dataType: string
+		summarizeBy: none
+		sourceColumn: run_id
+
+	column 'Run Started At'
+		dataType: dateTime
+		isHidden
+		formatString: dd mmm yyyy hh:nn
+		summarizeBy: none
+		sourceColumn: run_started_at
+
+	column 'Rows Loaded'
+		dataType: int64
+		isHidden
+		formatString: #,##0
+		sourceColumn: rows_loaded
+
+	column 'Values Fixed'
+		dataType: int64
+		isHidden
+		formatString: #,##0
+		sourceColumn: values_fixed
+
+	column 'Rows Removed'
+		dataType: int64
+		isHidden
+		formatString: #,##0
+		sourceColumn: rows_removed
+
+	column 'Rows Quarantined'
+		dataType: int64
+		isHidden
+		formatString: #,##0
+		sourceColumn: rows_quarantined
+
+	partition 'Extract Loads' = entity
+		mode: directLake
+		source
+			entityName: fact_extract_load
+			schemaName: dbo
+			expressionSource: 'DirectLake - lh_gold'
+

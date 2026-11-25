@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "SemanticModel",
+    "displayName": "sm_case_management",
+    "description": "Direct Lake model over lh_gold for the service overview and data quality report."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "15416a51-5cd6-ae75-4df7-cb4a8a44a631"
+  }
+}
