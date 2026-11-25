@@ -139,3 +139,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** pl_load_extract has its concurrency set to 1. A run started while another is going waits in the queue.
 - **Alternatives:** No limit, relying on Delta conflicts. A lock row in the run log.
 - **Reason:** Two runs at once would load the same extract in parallel; one would fail on a Delta conflict and log Failed although the other succeeded. The pipeline setting needs no code. Tested: a run started 20 seconds after another stayed NotStarted until the first completed. The time in the queue counts in that run's duration_seconds, because a run is timed from its trigger time.
+
+## Gold lakehouse with a small star schema
+
+- **Decision:** lh_gold has schemas on and its tables in dbo. fact_episode holds one row per Silver episode with wait days, length of stay, and flags for open, planned completion and seen within the wait threshold. The dimensions are dim_client, dim_service, dim_date, and one per code list a question needs: dim_referral_source, dim_substance and dim_discharge_reason. fact_extract_load holds the data trust figures per extract, and report_settings the reporting date and wait threshold.
+- **Alternatives:** One wide reporting table. Gold as views over Silver. A gold schema inside lh_silver.
+- **Reason:** In a star each question is a count on one fact filtered by one dimension, which is the shape a semantic model expects. Gold is tables, not views, because Direct Lake reads Delta tables. A separate lakehouse follows the one-lakehouse-per-layer decision. Only tables an M4 question needs were built, so the client journey stages in the plan are left out.
