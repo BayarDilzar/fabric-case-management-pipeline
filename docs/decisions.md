@@ -103,3 +103,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** nb_load_bronze reads the header of every file it is about to load and compares it with the columns in the generator spec. A missing or extra column fails the run, naming the file and the column, before any table is written.
 - **Alternatives:** Let Delta fill a missing column with null. Check only the four extract files. Check in Silver.
 - **Reason:** Spark loads a file with a missing column without complaint, so the broken extract 2026-11-22 would reach Silver with every end_date empty. Checking every file the run reads, the reference files and manifest included, keeps one rule: nothing is written unless everything matches. A check in Silver would come too late, because Bronze would already hold the rows.
+
+## Log the failure, then fail the pipeline
+
+- **Decision:** Each notebook step in pl_load_extract has its own failure branch: a run log row with status Failed, the step name and the error message, then a Fail activity with the same message. The Fail activity runs whether or not the log row was written.
+- **Alternatives:** No failure branch. A failure branch with the log step only.
+- **Reason:** When a failed activity is handled by a branch that succeeds, monitoring shows the whole run as Succeeded. The Fail activity keeps a failed load Failed. A branch per step records which step failed without parsing the message.
