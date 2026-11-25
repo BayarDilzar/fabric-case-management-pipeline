@@ -85,3 +85,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** pl_load_extract runs one extract through four notebooks in order: nb_resolve_extract picks the extract, nb_load_bronze loads Bronze, nb_load_silver merges into Silver, and nb_write_run_log logs the run. It calls nb_load_bronze directly, and pl_load_bronze is deleted.
 - **Alternatives:** Call pl_load_bronze as a child pipeline. One notebook that runs the others with notebookutils.
 - **Reason:** The current Invoke pipeline activity needs a connection object with stored credentials, even inside one workspace, and the legacy activity is being replaced. pl_load_bronze only wrapped one notebook, so a child pipeline would add a credential and a second run in monitoring for no gain. Separate pipeline steps show which step failed, in monitoring and in the run log.
+
+## The resolver loads the oldest extract not yet loaded
+
+- **Decision:** With no extract_id, nb_resolve_extract lists the date folders under Files/landing/extracts and returns the oldest one that has no Succeeded row in ops.run_log. With an extract_id it returns that one. When nothing is left, the pipeline logs Nothing to load and ends as Succeeded.
+- **Alternatives:** The newest landed extract. A separate control table of loaded extracts. Get Metadata and Filter activities in the pipeline.
+- **Reason:** A schedule passes no extract date, so the pipeline has to work out what comes next. Loading in date order keeps Silver in step with the source. Only a Succeeded run counts, so a failed or half-finished load is tried again and a broken extract is never skipped. The run log already records success, so no second table is needed. Pipeline expressions cannot sort, so the choice is made in Python.
