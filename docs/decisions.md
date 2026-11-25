@@ -175,3 +175,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** Each view in the reporting schema of the lh_gold SQL analytics endpoint is a .sql file in sql/reporting/, named after its view. sql/deploy_views.py deploys them with mssql-python and an Azure CLI token, and finds the endpoint by name. A test checks that each file creates the view it is named after.
 - **Alternatives:** Views created by hand in the portal. A Fabric notebook holding the view text. pyodbc with an ODBC driver.
 - **Reason:** Files keep each view's text in the repo, where it is reviewed with the rest of the code. A notebook would hold a second copy of every view. mssql-python is Microsoft's driver and needs no separate ODBC install; this machine had only the old SQL Server driver, which cannot use Entra tokens. The script stores no server name or ID.
+
+## Direct Lake semantic model
+
+- **Decision:** sm_case_management reads the lh_gold Delta tables in Direct Lake mode through one OneLake connection. It has nine tables with business names, six single-direction relationships from Episodes, hidden keys, and one or two measures per question. It was written as TMDL and deployed through the Fabric REST API.
+- **Alternatives:** Import mode with a scheduled refresh. DirectQuery against the SQL endpoint. Building it with the Power BI modeling server.
+- **Reason:** Direct Lake reads the Delta files themselves, so there is no copy of Gold to refresh: a refresh only points the model at the latest table versions, and took about 3 seconds. Import would hold a second copy and need its own schedule. The modeling server needs its licence terms accepted for the user, so the model was written as TMDL instead. Its files reach fabric/ when the model is committed from Source control.
