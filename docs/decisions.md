@@ -151,3 +151,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** nb_load_gold rebuilds every Gold table from Silver with CREATE OR REPLACE TABLE on every run. It is the last load step of pl_load_extract, with the same log-then-fail branch as the other steps.
 - **Alternatives:** Merge Gold incrementally, as Silver is. Rebuild Gold on its own schedule.
 - **Reason:** Gold is small: 2,683 episodes and 2,090 clients after four extracts, rebuilt in 28 to 73 seconds in test runs. A full rebuild is simpler and always consistent with Silver, and a rerun gives the same tables. CREATE OR REPLACE keeps each table's Delta history. As the last load step, Gold changes only after Bronze and Silver have succeeded.
+
+## Reporting date and wait threshold in report_settings
+
+- **Decision:** Gold's reporting date is the cut-off of the latest loaded extract, never today. The wait threshold is a parameter of nb_load_gold, 21 days by default. Both are stored in report_settings, which the views and the model read.
+- **Alternatives:** Today's date. The threshold typed into each view and measure.
+- **Reason:** With today's date the same data would give different answers on different days, and the length of stay of open episodes would grow while nothing loaded. One stored threshold keeps the views and the model in step. 21 days is a local target, not a claimed national standard.
