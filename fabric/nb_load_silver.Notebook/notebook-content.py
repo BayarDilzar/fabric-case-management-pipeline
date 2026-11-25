@@ -17,8 +17,10 @@
 
 # PARAMETERS CELL ********************
 
-# Set when the notebook is run. It is empty by default, so a run without it fails instead of guessing.
+# Set when the notebook is run. extract_id is empty by default, so a run without it fails instead of guessing.
+# pl_load_extract passes its own run_id so the run log and the dq tables share it; a direct run makes one.
 extract_id = ""
+run_id = ""
 
 # CELL ********************
 
@@ -32,7 +34,9 @@ if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", extract_id):
 SILVER = "dbo"
 DQ = "dq"
 # Runs go one at a time, so the start time in UTC is enough to tell them apart.
-run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+run_id = run_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+if not re.fullmatch(r"\d{8}T\d{6}Z", run_id):
+    raise ValueError(f"run_id must look like 20261122T200000Z, not '{run_id}'.")
 
 # One view per Bronze table, holding only this extract. Python puts the checked extract_id into the query,
 # because spark.sql named parameters failed on this runtime. The views are made from DataFrames because a
@@ -50,8 +54,9 @@ if empty:
 
 # CELL ********************
 
-# Every rule, its action and the text used as the quarantine reason. A row's rule ids are listed in the
-# order the checks run: missing, unreadable type, invalid code, orphan, business rules, quarantined parent.
+# Every rule, its action and the text used as the quarantine reason. A row's rule ids are listed in the order
+# the checks run: missing, unreadable type, copies that cannot be ranked, invalid code, orphan, business rules,
+# quarantined parent.
 spark.sql("""
 CREATE OR REPLACE TEMP VIEW rules AS
 SELECT * FROM VALUES
@@ -61,6 +66,7 @@ SELECT * FROM VALUES
     ('clients', 'DQ_CLI_CODE_CASE', 'sex written in lower case or with spaces, so it was trimmed and upper-cased.', 'fixed'),
     ('clients', 'DQ_CLI_MISSING_REQUIRED', 'A required field is empty: client_id, birth_year, sex or last_modified_at.', 'quarantined'),
     ('clients', 'DQ_CLI_INVALID_TYPE', 'birth_year is not a whole number, or last_modified_at is not a timestamp.', 'quarantined'),
+    ('clients', 'DQ_CLI_DUP_BAD_TIMESTAMP', 'Several rows share this client_id and one has an empty or unreadable last_modified_at, so the latest cannot be chosen. Every copy is quarantined.', 'quarantined'),
     ('clients', 'DQ_CLI_INVALID_CODE', 'sex is not in its code list.', 'quarantined'),
 
     ('episodes', 'DQ_EPI_DUP_EXACT', 'Exact copy of another row with the same episode_id. One copy is kept.', 'removed'),
@@ -70,8 +76,9 @@ SELECT * FROM VALUES
     ('episodes', 'DQ_EPI_DATE_FORMAT', 'referral_date, triage_date or discharge_date written as DD/MM/YYYY or YYYYMMDD, read as a date.', 'fixed'),
     ('episodes', 'DQ_EPI_MISSING_REQUIRED', 'A required field is empty: episode_id, client_id, service_code, referral_date, referral_source, primary_substance or last_modified_at.', 'quarantined'),
     ('episodes', 'DQ_EPI_INVALID_TYPE', 'A date is not a real date in an accepted format, or last_modified_at is not a timestamp.', 'quarantined'),
+    ('episodes', 'DQ_EPI_DUP_BAD_TIMESTAMP', 'Several rows share this episode_id and one has an empty or unreadable last_modified_at, so the latest cannot be chosen. Every copy is quarantined.', 'quarantined'),
     ('episodes', 'DQ_EPI_INVALID_CODE', 'service_code is not in services, or referral_source, primary_substance or discharge_reason is not in its code list.', 'quarantined'),
-    ('episodes', 'DQ_EPI_ORPHAN_CLIENT', 'client_id is not in clients.', 'quarantined'),
+    ('episodes', 'DQ_EPI_ORPHAN_CLIENT', 'client_id is in neither Silver clients nor this extract.', 'quarantined'),
     ('episodes', 'DQ_EPI_DISCHARGE_BEFORE_REFERRAL', 'discharge_date is before referral_date (rule R07).', 'quarantined'),
     ('episodes', 'DQ_EPI_FUTURE_DATE', 'A date is after the extract cut-off (rule R10).', 'quarantined'),
     ('episodes', 'DQ_EPI_CLIENT_QUARANTINED', 'The client of this episode is quarantined.', 'quarantined'),
@@ -83,8 +90,9 @@ SELECT * FROM VALUES
     ('interventions', 'DQ_INT_DATE_FORMAT', 'start_date or end_date written as DD/MM/YYYY or YYYYMMDD, read as a date.', 'fixed'),
     ('interventions', 'DQ_INT_MISSING_REQUIRED', 'A required field is empty: intervention_id, episode_id, intervention_type, start_date or last_modified_at.', 'quarantined'),
     ('interventions', 'DQ_INT_INVALID_TYPE', 'A date is not a real date in an accepted format, or last_modified_at is not a timestamp.', 'quarantined'),
+    ('interventions', 'DQ_INT_DUP_BAD_TIMESTAMP', 'Several rows share this intervention_id and one has an empty or unreadable last_modified_at, so the latest cannot be chosen. Every copy is quarantined.', 'quarantined'),
     ('interventions', 'DQ_INT_INVALID_CODE', 'intervention_type is not in its code list.', 'quarantined'),
-    ('interventions', 'DQ_INT_ORPHAN_EPISODE', 'episode_id is not in episodes.', 'quarantined'),
+    ('interventions', 'DQ_INT_ORPHAN_EPISODE', 'episode_id is in neither Silver episodes nor this extract.', 'quarantined'),
     ('interventions', 'DQ_INT_END_BEFORE_START', 'end_date is before start_date (rule R08).', 'quarantined'),
     ('interventions', 'DQ_INT_FUTURE_DATE', 'A date is after the extract cut-off (rule R10).', 'quarantined'),
     ('interventions', 'DQ_INT_EPISODE_QUARANTINED', 'The episode of this intervention is quarantined.', 'quarantined'),
@@ -96,8 +104,9 @@ SELECT * FROM VALUES
     ('reviews', 'DQ_REV_DATE_FORMAT', 'review_date written as DD/MM/YYYY or YYYYMMDD, read as a date.', 'fixed'),
     ('reviews', 'DQ_REV_MISSING_REQUIRED', 'A required field is empty: review_id, episode_id, review_date, review_type or last_modified_at.', 'quarantined'),
     ('reviews', 'DQ_REV_INVALID_TYPE', 'review_date is not a real date in an accepted format, a score is not a whole number, or last_modified_at is not a timestamp.', 'quarantined'),
+    ('reviews', 'DQ_REV_DUP_BAD_TIMESTAMP', 'Several rows share this review_id and one has an empty or unreadable last_modified_at, so the latest cannot be chosen. Every copy is quarantined.', 'quarantined'),
     ('reviews', 'DQ_REV_INVALID_CODE', 'review_type is not in its code list.', 'quarantined'),
-    ('reviews', 'DQ_REV_ORPHAN_EPISODE', 'episode_id is not in episodes.', 'quarantined'),
+    ('reviews', 'DQ_REV_ORPHAN_EPISODE', 'episode_id is in neither Silver episodes nor this extract.', 'quarantined'),
     ('reviews', 'DQ_REV_DAYS_RANGE', 'days_used_last_28 is outside 0 to 28 (rule R09).', 'quarantined'),
     ('reviews', 'DQ_REV_QOL_RANGE', 'quality_of_life is outside 0 to 20 (rule R09).', 'quarantined'),
     ('reviews', 'DQ_REV_FUTURE_DATE', 'review_date is after the extract cut-off (rule R10).', 'quarantined'),
@@ -202,22 +211,69 @@ FROM bronze_reviews b
 
 # CELL ********************
 
+# The tables are created empty on the first run, from the same views that fill them, so their columns
+# always match. The checks below read Silver, so it must exist before them.
+TABLES = {"clients": ("client_id", "CLI"), "episodes": ("episode_id", "EPI"),
+          "interventions": ("intervention_id", "INT"), "reviews": ("review_id", "REV")}
+for schema in {SILVER, DQ}:
+    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+for table in TABLES:
+    spark.sql(f"""
+        CREATE TABLE IF NOT EXISTS {SILVER}.{table} USING DELTA AS
+        SELECT * EXCEPT (bronze), CAST(NULL AS STRING) AS _extract_id, CAST(NULL AS STRING) AS _run_id
+        FROM typed_{table} WHERE false
+    """)
+for table in ["services", "code_lists"]:
+    spark.sql(f"""
+        CREATE TABLE IF NOT EXISTS {SILVER}.{table} USING DELTA AS
+        SELECT *, CAST(NULL AS STRING) AS _run_id FROM silver_{table} WHERE false
+    """)
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {DQ}.rule_results (
+    run_id STRING, extract_id STRING, table_name STRING, rule_id STRING, rule_description STRING,
+    rows_checked BIGINT, rows_failed BIGINT, action STRING) USING DELTA
+""")
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {DQ}.quarantine (
+    run_id STRING, extract_id STRING, source_table STRING, business_key STRING, rule_ids STRING, reason STRING,
+    bronze_row STRING) USING DELTA
+""")
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {DQ}.reconciliation (
+    run_id STRING, extract_id STRING, table_name STRING, bronze_rows BIGINT, inserted BIGINT, updated BIGINT,
+    unchanged BIGINT, duplicates_removed BIGINT, quarantined BIGINT, silver_rows BIGINT) USING DELTA
+""")
+
+# CELL ********************
+
 # Step 2, ranked: number the rows of each business key, newest last_modified_at first. Row 1 is kept.
 # same_as_kept says whether a removed row is an exact copy of the kept row or an older version of it.
-# The same query runs for each table, so Python fills in the table and key names.
+# unrankable marks every copy of a key when one copy has no readable last_modified_at: the newest cannot be
+# told, so no copy is kept and all of them are quarantined. The same query runs for each table.
 RANKED = """
 CREATE OR REPLACE TEMP VIEW ranked_{table} AS
 SELECT *,
        -- A row with no key is not a copy of other rows with no key, so each one stands alone.
        CASE WHEN {key} IS NULL THEN 1 ELSE row_number() OVER newest_first END AS copy_number,
-       to_json(bronze) = first_value(to_json(bronze)) OVER newest_first AS same_as_kept
+       to_json(bronze) = first_value(to_json(bronze)) OVER newest_first AS same_as_kept,
+       {key} IS NOT NULL AND count(*) OVER same_key > 1 AND bool_or(last_modified_at IS NULL) OVER same_key AS unrankable
 FROM typed_{table}
-WINDOW newest_first AS (PARTITION BY {key} ORDER BY last_modified_at DESC NULLS LAST, to_json(bronze))
+WINDOW newest_first AS (PARTITION BY {key} ORDER BY last_modified_at DESC NULLS LAST, to_json(bronze)),
+       same_key AS (PARTITION BY {key})
 """
-TABLES = {"clients": ("client_id", "CLI"), "episodes": ("episode_id", "EPI"),
-          "interventions": ("intervention_id", "INT"), "reviews": ("review_id", "REV")}
 for table, (key, _) in TABLES.items():
     spark.sql(RANKED.format(table=table, key=key))
+
+# One row per parent key known to this extract or to Silver. A weekly extract holds only new and changed rows,
+# so a child whose parent loaded in an earlier extract finds it in Silver. quarantined is true when the
+# parent's row in this extract failed a check. Made into a view from a DataFrame, because a view written as
+# SQL text cannot name a lakehouse table here.
+PARENT = f"""
+SELECT coalesce(b.{{key}}, s.{{key}}) AS {{key}}, coalesce(b.quarantined, false) AS quarantined
+FROM (SELECT {{key}}, bool_or(size(failed_rules) > 0) AS quarantined
+      FROM checked_{{table}} WHERE {{key}} IS NOT NULL GROUP BY {{key}}) b
+FULL JOIN {SILVER}.{{table}} s ON s.{{key}} = b.{{key}}
+"""
 
 # CELL ********************
 
@@ -238,12 +294,14 @@ SELECT c.*,
               OR coalesce(trim(c.bronze.last_modified_at), '') = '', 'DQ_CLI_MISSING_REQUIRED', NULL),
            IF((trim(c.bronze.birth_year) <> '' AND c.birth_year IS NULL)
               OR (trim(c.bronze.last_modified_at) <> '' AND c.last_modified_at IS NULL), 'DQ_CLI_INVALID_TYPE', NULL),
+           IF(c.unrankable, 'DQ_CLI_DUP_BAD_TIMESTAMP', NULL),
            IF(NOT array_contains(v.sex, c.sex), 'DQ_CLI_INVALID_CODE', NULL)
        ), rule -> rule IS NOT NULL) AS failed_rules
 FROM ranked_clients c
 CROSS JOIN valid_codes v
-WHERE c.copy_number = 1
+WHERE c.copy_number = 1 OR c.unrankable
 """)
+spark.sql(PARENT.format(table="clients", key="client_id")).createOrReplaceTempView("parent_clients")
 spark.sql("""
 CREATE OR REPLACE TEMP VIEW checked_episodes AS
 SELECT e.*,
@@ -271,20 +329,22 @@ SELECT e.*,
               OR (trim(e.bronze.triage_date) <> '' AND e.triage_date IS NULL)
               OR (trim(e.bronze.discharge_date) <> '' AND e.discharge_date IS NULL)
               OR (trim(e.bronze.last_modified_at) <> '' AND e.last_modified_at IS NULL), 'DQ_EPI_INVALID_TYPE', NULL),
+           IF(e.unrankable, 'DQ_EPI_DUP_BAD_TIMESTAMP', NULL),
            IF(NOT array_contains(v.service_code, e.service_code) OR NOT array_contains(v.referral_source, e.referral_source)
               OR NOT array_contains(v.primary_substance, e.primary_substance)
               OR NOT array_contains(v.discharge_reason, e.discharge_reason), 'DQ_EPI_INVALID_CODE', NULL),
            IF(e.client_id IS NOT NULL AND p.client_id IS NULL, 'DQ_EPI_ORPHAN_CLIENT', NULL),
            IF(e.discharge_date < e.referral_date, 'DQ_EPI_DISCHARGE_BEFORE_REFERRAL', NULL),
            IF(greatest(e.referral_date, e.triage_date, e.discharge_date) > r.cut_off, 'DQ_EPI_FUTURE_DATE', NULL),
-           IF(size(p.failed_rules) > 0, 'DQ_EPI_CLIENT_QUARANTINED', NULL)
+           IF(p.quarantined, 'DQ_EPI_CLIENT_QUARANTINED', NULL)
        ), rule -> rule IS NOT NULL) AS failed_rules
 FROM ranked_episodes e
 CROSS JOIN valid_codes v
 CROSS JOIN run r
-LEFT JOIN checked_clients p ON p.client_id = e.client_id
-WHERE e.copy_number = 1
+LEFT JOIN parent_clients p ON p.client_id = e.client_id
+WHERE e.copy_number = 1 OR e.unrankable
 """)
+spark.sql(PARENT.format(table="episodes", key="episode_id")).createOrReplaceTempView("parent_episodes")
 spark.sql("""
 CREATE OR REPLACE TEMP VIEW checked_interventions AS
 SELECT i.*,
@@ -305,17 +365,18 @@ SELECT i.*,
            IF((trim(i.bronze.start_date) <> '' AND i.start_date IS NULL)
               OR (trim(i.bronze.end_date) <> '' AND i.end_date IS NULL)
               OR (trim(i.bronze.last_modified_at) <> '' AND i.last_modified_at IS NULL), 'DQ_INT_INVALID_TYPE', NULL),
+           IF(i.unrankable, 'DQ_INT_DUP_BAD_TIMESTAMP', NULL),
            IF(NOT array_contains(v.intervention_type, i.intervention_type), 'DQ_INT_INVALID_CODE', NULL),
            IF(i.episode_id IS NOT NULL AND p.episode_id IS NULL, 'DQ_INT_ORPHAN_EPISODE', NULL),
            IF(i.end_date < i.start_date, 'DQ_INT_END_BEFORE_START', NULL),
            IF(greatest(i.start_date, i.end_date) > r.cut_off, 'DQ_INT_FUTURE_DATE', NULL),
-           IF(size(p.failed_rules) > 0, 'DQ_INT_EPISODE_QUARANTINED', NULL)
+           IF(p.quarantined, 'DQ_INT_EPISODE_QUARANTINED', NULL)
        ), rule -> rule IS NOT NULL) AS failed_rules
 FROM ranked_interventions i
 CROSS JOIN valid_codes v
 CROSS JOIN run r
-LEFT JOIN checked_episodes p ON p.episode_id = i.episode_id
-WHERE i.copy_number = 1
+LEFT JOIN parent_episodes p ON p.episode_id = i.episode_id
+WHERE i.copy_number = 1 OR i.unrankable
 """)
 spark.sql("""
 CREATE OR REPLACE TEMP VIEW checked_reviews AS
@@ -338,24 +399,59 @@ SELECT w.*,
               OR (trim(w.bronze.days_used_last_28) <> '' AND w.days_used_last_28 IS NULL)
               OR (trim(w.bronze.quality_of_life) <> '' AND w.quality_of_life IS NULL)
               OR (trim(w.bronze.last_modified_at) <> '' AND w.last_modified_at IS NULL), 'DQ_REV_INVALID_TYPE', NULL),
+           IF(w.unrankable, 'DQ_REV_DUP_BAD_TIMESTAMP', NULL),
            IF(NOT array_contains(v.review_type, w.review_type), 'DQ_REV_INVALID_CODE', NULL),
            IF(w.episode_id IS NOT NULL AND p.episode_id IS NULL, 'DQ_REV_ORPHAN_EPISODE', NULL),
            IF(w.days_used_last_28 NOT BETWEEN 0 AND 28, 'DQ_REV_DAYS_RANGE', NULL),
            IF(w.quality_of_life NOT BETWEEN 0 AND 20, 'DQ_REV_QOL_RANGE', NULL),
            IF(w.review_date > r.cut_off, 'DQ_REV_FUTURE_DATE', NULL),
-           IF(size(p.failed_rules) > 0, 'DQ_REV_EPISODE_QUARANTINED', NULL)
+           IF(p.quarantined, 'DQ_REV_EPISODE_QUARANTINED', NULL)
        ), rule -> rule IS NOT NULL) AS failed_rules
 FROM ranked_reviews w
 CROSS JOIN valid_codes v
 CROSS JOIN run r
-LEFT JOIN checked_episodes p ON p.episode_id = w.episode_id
-WHERE w.copy_number = 1
+LEFT JOIN parent_episodes p ON p.episode_id = w.episode_id
+WHERE w.copy_number = 1 OR w.unrankable
 """)
 
 # CELL ********************
 
-# Every write goes through this one function. M2 rebuilds Silver in full; M3 swaps the Silver overwrite for a merge.
-# It uses the DataFrame writer because Spark SQL has no single statement that replaces only one extract's rows.
+# Every rule a row triggered. Duplicate rules count removed Bronze rows; the others count checked rows.
+HITS = """
+SELECT '{table}' AS table_name, IF(same_as_kept, 'DQ_{prefix}_DUP_EXACT', 'DQ_{prefix}_DUP_VERSION') AS rule_id
+FROM ranked_{table} WHERE copy_number > 1 AND NOT unrankable
+UNION ALL SELECT '{table}', explode(fixed_rules) FROM checked_{table}
+UNION ALL SELECT '{table}', explode(failed_rules) FROM checked_{table}
+"""
+spark.sql("CREATE OR REPLACE TEMP VIEW rule_hits AS " + " UNION ALL ".join(HITS.format(table=t, prefix=p) for t, (_, p) in TABLES.items()))
+
+# Rule ids are typed twice, in the rules view and in the checks. A typo in a check would quarantine a row
+# with an empty reason and leave its count out of rule_results, so the run stops before writing any data.
+unknown = spark.sql("""
+SELECT DISTINCT h.table_name, h.rule_id FROM rule_hits h
+LEFT ANTI JOIN rules r ON r.table_name = h.table_name AND r.rule_id = h.rule_id
+""").collect()
+if unknown:
+    raise ValueError("A check raised rule ids that are not in the rules view, so no data was written: "
+                     + ", ".join(f"{row.rule_id} on {row.table_name}" for row in unknown) + ".")
+
+# The rows to merge into Silver: the kept rows that failed no rule, with the extract they came from and this run.
+for table in TABLES:
+    spark.sql(f"""
+        CREATE OR REPLACE TEMP VIEW clean_{table} AS
+        SELECT * EXCEPT (bronze, copy_number, same_as_kept, unrankable, fixed_rules, failed_rules),
+               bronze._extract_id AS _extract_id, (SELECT run_id FROM run) AS _run_id
+        FROM checked_{table}
+        WHERE size(failed_rules) = 0
+    """)
+for table in ["services", "code_lists"]:
+    spark.sql(f"CREATE OR REPLACE TEMP VIEW clean_{table} AS SELECT *, (SELECT run_id FROM run) AS _run_id FROM silver_{table}")
+
+# CELL ********************
+
+# Every write goes through these two functions. Silver is merged on the business key; the dq tables are
+# replaced for this extract or appended. write() uses the DataFrame writer because Spark SQL has no single
+# statement that replaces only one extract's rows.
 def write(table, query, mode="overwrite", replace_where=None):
     writer = spark.sql(query).write.format("delta").mode(mode)
     if replace_where:
@@ -363,39 +459,33 @@ def write(table, query, mode="overwrite", replace_where=None):
     writer.saveAsTable(table)
 
 
-for schema in {SILVER, DQ}:
-    spark.sql(f"CREATE SCHEMA IF NOT EXISTS {schema}")
-spark.sql(f"""
-CREATE TABLE IF NOT EXISTS {DQ}.rule_results (
-    run_id STRING, extract_id STRING, table_name STRING, rule_id STRING, rule_description STRING,
-    rows_checked BIGINT, rows_failed BIGINT, action STRING) USING DELTA
-""")
-spark.sql(f"""
-CREATE TABLE IF NOT EXISTS {DQ}.quarantine (
-    run_id STRING, extract_id STRING, source_table STRING, business_key STRING, rule_ids STRING, reason STRING,
-    bronze_row STRING) USING DELTA
-""")
-spark.sql(f"""
-CREATE TABLE IF NOT EXISTS {DQ}.reconciliation (
-    run_id STRING, extract_id STRING, table_name STRING, bronze_rows BIGINT, duplicates_removed BIGINT,
-    quarantined BIGINT, silver_rows BIGINT) USING DELTA
-""")
-
-# CELL ********************
-
-# Silver: the kept rows that failed no rule, typed, with the extract they came from and the run that wrote them.
-for table in TABLES:
-    write(f"{SILVER}.{table}", f"""
-        SELECT * EXCEPT (bronze, copy_number, same_as_kept, fixed_rules, failed_rules),
-               bronze._extract_id AS _extract_id, (SELECT run_id FROM run) AS _run_id
-        FROM checked_{table}
-        WHERE size(failed_rules) = 0
+def merge_into(table, keys, update_when):
+    same_key = " AND ".join(f"t.{k} = s.{k}" for k in keys)
+    spark.sql(f"""
+        MERGE INTO {SILVER}.{table} t USING clean_{table} s ON {same_key}
+        WHEN MATCHED AND {update_when} THEN UPDATE SET *
+        WHEN NOT MATCHED THEN INSERT *
     """)
-for table in ["services", "code_lists"]:
-    write(f"{SILVER}.{table}", f"SELECT *, (SELECT run_id FROM run) AS _run_id FROM silver_{table}")
 
-# Quarantine: one row per rejected record, with every rule it failed and the original Bronze row as JSON.
-# ignoreNullFields is off so the JSON still shows an empty field as null. A rebuild replaces this extract's rows.
+
+# (business key, when a stored row is replaced). A row is updated only by a newer last_modified_at, so a
+# rerun or an older extract loaded late never overwrites newer data. Reference rows have no timestamp,
+# so they are replaced only when a value differs.
+NEWER = "s.last_modified_at > t.last_modified_at"
+MERGES = {
+    "clients": (["client_id"], NEWER), "episodes": (["episode_id"], NEWER),
+    "interventions": (["intervention_id"], NEWER), "reviews": (["review_id"], NEWER),
+    "services": (["service_code"], "NOT (s.service_name <=> t.service_name AND s.local_authority_code <=> t.local_authority_code)"),
+    "code_lists": (["list_name", "code"], "NOT (s.label <=> t.label)"),
+}
+
+# Each Silver table's version before the merge, so reconciliation can tell inserted rows from updated ones.
+versions = {table: spark.sql(f"DESCRIBE HISTORY {SILVER}.{table} LIMIT 1").first().version for table in MERGES}
+for table, (keys, update_when) in MERGES.items():
+    merge_into(table, keys, update_when)
+
+# Quarantine: one row per rejected Bronze row, with every rule it failed and the original row as JSON.
+# ignoreNullFields is off so the JSON still shows an empty field as null. A rerun replaces this extract's rows.
 QUARANTINE = """
 SELECT r.run_id, r.extract_id, '{table}' AS source_table, c.{key} AS business_key,
        concat_ws(',', c.failed_rules) AS rule_ids,
@@ -411,18 +501,10 @@ write(f"{DQ}.quarantine", " UNION ALL ".join(QUARANTINE.format(table=t, key=k) f
 
 # Rule results: one row per rule for this run, including rules that found nothing.
 # Duplicate rules check every Bronze row; the other rules check the rows left after duplicates are removed.
-HITS = """
-SELECT '{table}' AS table_name, IF(same_as_kept, 'DQ_{prefix}_DUP_EXACT', 'DQ_{prefix}_DUP_VERSION') AS rule_id
-FROM ranked_{table} WHERE copy_number > 1
-UNION ALL SELECT '{table}', explode(fixed_rules) FROM checked_{table}
-UNION ALL SELECT '{table}', explode(failed_rules) FROM checked_{table}
-"""
 CHECKED = "SELECT '{table}' AS table_name, (SELECT count(*) FROM bronze_{table}) AS bronze_rows, (SELECT count(*) FROM checked_{table}) AS kept_rows"
-hits = " UNION ALL ".join(HITS.format(table=t, prefix=p) for t, (_, p) in TABLES.items())
 checked = " UNION ALL ".join(CHECKED.format(table=t) for t in TABLES)
 write(f"{DQ}.rule_results", f"""
-    WITH hits AS ({hits}),
-    counts AS (SELECT table_name, rule_id, count(*) AS rows_failed FROM hits GROUP BY table_name, rule_id),
+    WITH counts AS (SELECT table_name, rule_id, count(*) AS rows_failed FROM rule_hits GROUP BY table_name, rule_id),
     checked AS ({checked})
     SELECT r.run_id, r.extract_id, u.table_name, u.rule_id, u.rule_description,
            CASE WHEN u.action = 'removed' THEN k.bronze_rows ELSE k.kept_rows END AS rows_checked,
@@ -436,31 +518,45 @@ write(f"{DQ}.rule_results", f"""
 # CELL ********************
 
 # Reconciliation: each count is read back from where it was stored, so a lost or extra row shows as a gap.
-# Bronze rows = Silver rows + quarantined + duplicates removed, for every table.
-RECONCILE = f"""
-SELECT r.run_id, r.extract_id, '{{table}}' AS table_name,
-       (SELECT count(*) FROM bronze_{{table}}) AS bronze_rows,
-       (SELECT coalesce(sum(rows_failed), 0) FROM {DQ}.rule_results
-        WHERE run_id = r.run_id AND table_name = '{{table}}' AND action = 'removed') AS duplicates_removed,
-       (SELECT count(*) FROM {DQ}.quarantine WHERE run_id = r.run_id AND source_table = '{{table}}') AS quarantined,
-       (SELECT count(*) FROM {SILVER}.{{table}}) AS silver_rows
-FROM run r
-"""
-write(f"{DQ}.reconciliation", " UNION ALL ".join(RECONCILE.format(table=t) for t in SOURCES), mode="append")
+# Inserted and updated rows carry this run_id; the version before the merge tells them apart. Unchanged rows
+# are clean rows whose stored row came from an earlier run: the same row again, or one already newer.
+# Bronze rows = inserted + updated + unchanged + duplicates removed + quarantined, for every table.
+def reconcile(table, keys):
+    same_key = " AND ".join(f"o.{k} = n.{k}" for k in keys)
+    clean_key = " AND ".join(f"n.{k} = c.{k}" for k in keys)
+    before = f"{SILVER}.{table} VERSION AS OF {versions[table]}"
+    return f"""
+    SELECT r.run_id, r.extract_id, '{table}' AS table_name,
+           (SELECT count(*) FROM bronze_{table}) AS bronze_rows,
+           (SELECT count(*) FROM {SILVER}.{table} n
+            WHERE n._run_id = '{run_id}' AND NOT EXISTS (SELECT 1 FROM {before} o WHERE {same_key})) AS inserted,
+           (SELECT count(*) FROM {SILVER}.{table} n
+            WHERE n._run_id = '{run_id}' AND EXISTS (SELECT 1 FROM {before} o WHERE {same_key})) AS updated,
+           (SELECT count(*) FROM clean_{table} c JOIN {SILVER}.{table} n ON {clean_key}
+            WHERE n._run_id <> '{run_id}') AS unchanged,
+           (SELECT coalesce(sum(rows_failed), 0) FROM {DQ}.rule_results
+            WHERE run_id = '{run_id}' AND table_name = '{table}' AND action = 'removed') AS duplicates_removed,
+           (SELECT count(*) FROM {DQ}.quarantine WHERE run_id = '{run_id}' AND source_table = '{table}') AS quarantined,
+           (SELECT count(*) FROM {SILVER}.{table}) AS silver_rows
+    FROM run r
+    """
+
+
+write(f"{DQ}.reconciliation", " UNION ALL ".join(reconcile(t, keys) for t, (keys, _) in MERGES.items()), mode="append")
 
 spark.sql(f"""
-SELECT table_name, bronze_rows, duplicates_removed, quarantined, silver_rows
-FROM {DQ}.reconciliation WHERE run_id = (SELECT run_id FROM run)
+SELECT table_name, bronze_rows, inserted, updated, unchanged, duplicates_removed, quarantined, silver_rows
+FROM {DQ}.reconciliation WHERE run_id = '{run_id}'
 """).show(truncate=False)
 spark.sql(f"""
 SELECT table_name, rule_id, rows_checked, rows_failed, action
-FROM {DQ}.rule_results WHERE run_id = (SELECT run_id FROM run) AND rows_failed > 0
+FROM {DQ}.rule_results WHERE run_id = '{run_id}' AND rows_failed > 0
 ORDER BY table_name, rule_id
 """).show(100, truncate=False)
 
 unbalanced = spark.sql(f"""
 SELECT table_name FROM {DQ}.reconciliation
-WHERE run_id = (SELECT run_id FROM run) AND bronze_rows <> silver_rows + quarantined + duplicates_removed
+WHERE run_id = '{run_id}' AND bronze_rows <> inserted + updated + unchanged + duplicates_removed + quarantined
 """).collect()
 if unbalanced:
     raise ValueError(f"Reconciliation does not balance for: {', '.join(row.table_name for row in unbalanced)}")
