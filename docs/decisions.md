@@ -127,3 +127,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** When several rows share a business key and any of them has an empty or unreadable last_modified_at, every copy is quarantined under DQ_<table>_DUP_BAD_TIMESTAMP, and none is counted as a removed duplicate.
 - **Alternatives:** Keep the copy with the latest readable timestamp. Keep the first copy in the file.
 - **Reason:** The newest copy cannot be told, so keeping one would be a guess, and the file order cannot be trusted. Before this rule, an unreadable timestamp on the newest copy made the older copy win and the newer one vanish as a duplicate. The test data has no such case, so the rule was tested with one injected row: both copies were quarantined and neither reached Silver.
+
+## An explicit extract must follow the load order
+
+- **Decision:** nb_resolve_extract refuses an explicit extract_id when any older landed extract has no Succeeded run, and names those extracts. A rerun of an extract whose older extracts all succeeded is allowed. An explicit extract_id must also be a date.
+- **Alternatives:** A runbook step only, as in M3. Checking quarantined orphans again when their parent arrives later.
+- **Reason:** Loading a newer extract before an older one quarantines its new rows whose parents are in the older one, and loading the older one later does not check them again. Refusing the run is one check in the resolver; checking quarantined rows again would change Silver's checks. Tested with a scratch copy whose run log hid 2026-11-08: 2026-11-15 was refused with a message naming 2026-11-08.
