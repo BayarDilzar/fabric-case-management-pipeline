@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "DataPipeline",
+    "displayName": "pl_load_extract",
+    "description": "Loads one extract from Bronze through Silver and logs the run in ops.run_log. With no extract_id it loads the oldest landed extract without a successful run."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "5f9f5f42-3800-bce7-44f2-367c9fdcc3dd"
+  }
+}

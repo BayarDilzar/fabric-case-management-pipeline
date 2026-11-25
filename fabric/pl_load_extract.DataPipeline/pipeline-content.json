@@ -1,0 +1,493 @@
+{
+  "properties": {
+    "description": "Loads one extract from Bronze through Silver and logs the run in ops.run_log. With no extract_id it loads the oldest landed extract without a successful run.",
+    "activities": [
+      {
+        "type": "SetVariable",
+        "typeProperties": {
+          "variableName": "run_id",
+          "value": {
+            "value": "@formatDateTime(pipeline().TriggerTime, 'yyyyMMddTHHmmssZ')",
+            "type": "Expression"
+          }
+        },
+        "name": "Set run id",
+        "dependsOn": []
+      },
+      {
+        "type": "TridentNotebook",
+        "typeProperties": {
+          "notebookId": "1b776ccd-6aa0-ba7d-4201-f29c6bc793a7",
+          "workspaceId": "00000000-0000-0000-0000-000000000000",
+          "parameters": {
+            "extract_id": {
+              "value": {
+                "value": "@pipeline().parameters.extract_id",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        },
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30
+        },
+        "name": "Resolve extract",
+        "dependsOn": [
+          {
+            "activity": "Set run id",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "TridentNotebook",
+        "typeProperties": {
+          "notebookId": "9ab9b053-81ab-8bb4-4571-8aa99f5c28d2",
+          "workspaceId": "00000000-0000-0000-0000-000000000000",
+          "parameters": {
+            "run_id": {
+              "value": {
+                "value": "@variables('run_id')",
+                "type": "Expression"
+              },
+              "type": "string"
+            },
+            "pipeline_run_id": {
+              "value": {
+                "value": "@pipeline().RunId",
+                "type": "Expression"
+              },
+              "type": "string"
+            },
+            "extract_id": {
+              "value": {
+                "value": "@pipeline().parameters.extract_id",
+                "type": "Expression"
+              },
+              "type": "string"
+            },
+            "trigger_type": {
+              "value": {
+                "value": "@pipeline().TriggerType",
+                "type": "Expression"
+              },
+              "type": "string"
+            },
+            "status": {
+              "value": "Failed",
+              "type": "string"
+            },
+            "failed_step": {
+              "value": "Resolve extract",
+              "type": "string"
+            },
+            "error_message": {
+              "value": {
+                "value": "@activity('Resolve extract').error.message",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        },
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30
+        },
+        "name": "Log Resolve extract failure",
+        "dependsOn": [
+          {
+            "activity": "Resolve extract",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "Fail",
+        "typeProperties": {
+          "message": {
+            "value": "@activity('Resolve extract').error.message",
+            "type": "Expression"
+          },
+          "errorCode": "ResolveextractFailed"
+        },
+        "name": "Fail after Resolve extract",
+        "dependsOn": [
+          {
+            "activity": "Log Resolve extract failure",
+            "dependencyConditions": [
+              "Completed"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "IfCondition",
+        "typeProperties": {
+          "expression": {
+            "value": "@not(empty(activity('Resolve extract').output.result.exitValue))",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "type": "TridentNotebook",
+              "typeProperties": {
+                "notebookId": "4a0ad3a1-a233-a81e-478b-1a999da115e6",
+                "workspaceId": "00000000-0000-0000-0000-000000000000",
+                "parameters": {
+                  "extract_id": {
+                    "value": {
+                      "value": "@activity('Resolve extract').output.result.exitValue",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  }
+                }
+              },
+              "policy": {
+                "timeout": "0.01:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30
+              },
+              "name": "Load Bronze",
+              "dependsOn": []
+            },
+            {
+              "type": "TridentNotebook",
+              "typeProperties": {
+                "notebookId": "9ab9b053-81ab-8bb4-4571-8aa99f5c28d2",
+                "workspaceId": "00000000-0000-0000-0000-000000000000",
+                "parameters": {
+                  "run_id": {
+                    "value": {
+                      "value": "@variables('run_id')",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "pipeline_run_id": {
+                    "value": {
+                      "value": "@pipeline().RunId",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "extract_id": {
+                    "value": {
+                      "value": "@activity('Resolve extract').output.result.exitValue",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "trigger_type": {
+                    "value": {
+                      "value": "@pipeline().TriggerType",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "status": {
+                    "value": "Failed",
+                    "type": "string"
+                  },
+                  "failed_step": {
+                    "value": "Load Bronze",
+                    "type": "string"
+                  },
+                  "error_message": {
+                    "value": {
+                      "value": "@activity('Load Bronze').error.message",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  }
+                }
+              },
+              "policy": {
+                "timeout": "0.01:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30
+              },
+              "name": "Log Load Bronze failure",
+              "dependsOn": [
+                {
+                  "activity": "Load Bronze",
+                  "dependencyConditions": [
+                    "Failed"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Fail",
+              "typeProperties": {
+                "message": {
+                  "value": "@activity('Load Bronze').error.message",
+                  "type": "Expression"
+                },
+                "errorCode": "LoadBronzeFailed"
+              },
+              "name": "Fail after Load Bronze",
+              "dependsOn": [
+                {
+                  "activity": "Log Load Bronze failure",
+                  "dependencyConditions": [
+                    "Completed"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "TridentNotebook",
+              "typeProperties": {
+                "notebookId": "bd4b0c2b-da2f-9fe8-4a30-04903dd1bb1b",
+                "workspaceId": "00000000-0000-0000-0000-000000000000",
+                "parameters": {
+                  "extract_id": {
+                    "value": {
+                      "value": "@activity('Resolve extract').output.result.exitValue",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "run_id": {
+                    "value": {
+                      "value": "@variables('run_id')",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  }
+                }
+              },
+              "policy": {
+                "timeout": "0.01:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30
+              },
+              "name": "Load Silver",
+              "dependsOn": [
+                {
+                  "activity": "Load Bronze",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "TridentNotebook",
+              "typeProperties": {
+                "notebookId": "9ab9b053-81ab-8bb4-4571-8aa99f5c28d2",
+                "workspaceId": "00000000-0000-0000-0000-000000000000",
+                "parameters": {
+                  "run_id": {
+                    "value": {
+                      "value": "@variables('run_id')",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "pipeline_run_id": {
+                    "value": {
+                      "value": "@pipeline().RunId",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "extract_id": {
+                    "value": {
+                      "value": "@activity('Resolve extract').output.result.exitValue",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "trigger_type": {
+                    "value": {
+                      "value": "@pipeline().TriggerType",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "status": {
+                    "value": "Failed",
+                    "type": "string"
+                  },
+                  "failed_step": {
+                    "value": "Load Silver",
+                    "type": "string"
+                  },
+                  "error_message": {
+                    "value": {
+                      "value": "@activity('Load Silver').error.message",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  }
+                }
+              },
+              "policy": {
+                "timeout": "0.01:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30
+              },
+              "name": "Log Load Silver failure",
+              "dependsOn": [
+                {
+                  "activity": "Load Silver",
+                  "dependencyConditions": [
+                    "Failed"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "Fail",
+              "typeProperties": {
+                "message": {
+                  "value": "@activity('Load Silver').error.message",
+                  "type": "Expression"
+                },
+                "errorCode": "LoadSilverFailed"
+              },
+              "name": "Fail after Load Silver",
+              "dependsOn": [
+                {
+                  "activity": "Log Load Silver failure",
+                  "dependencyConditions": [
+                    "Completed"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "TridentNotebook",
+              "typeProperties": {
+                "notebookId": "9ab9b053-81ab-8bb4-4571-8aa99f5c28d2",
+                "workspaceId": "00000000-0000-0000-0000-000000000000",
+                "parameters": {
+                  "run_id": {
+                    "value": {
+                      "value": "@variables('run_id')",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "pipeline_run_id": {
+                    "value": {
+                      "value": "@pipeline().RunId",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "extract_id": {
+                    "value": {
+                      "value": "@activity('Resolve extract').output.result.exitValue",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "trigger_type": {
+                    "value": {
+                      "value": "@pipeline().TriggerType",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "status": {
+                    "value": "Succeeded",
+                    "type": "string"
+                  }
+                }
+              },
+              "policy": {
+                "timeout": "0.01:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30
+              },
+              "name": "Log success",
+              "dependsOn": [
+                {
+                  "activity": "Load Silver",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ]
+            }
+          ],
+          "ifFalseActivities": [
+            {
+              "type": "TridentNotebook",
+              "typeProperties": {
+                "notebookId": "9ab9b053-81ab-8bb4-4571-8aa99f5c28d2",
+                "workspaceId": "00000000-0000-0000-0000-000000000000",
+                "parameters": {
+                  "run_id": {
+                    "value": {
+                      "value": "@variables('run_id')",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "pipeline_run_id": {
+                    "value": {
+                      "value": "@pipeline().RunId",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "trigger_type": {
+                    "value": {
+                      "value": "@pipeline().TriggerType",
+                      "type": "Expression"
+                    },
+                    "type": "string"
+                  },
+                  "status": {
+                    "value": "Nothing to load",
+                    "type": "string"
+                  }
+                }
+              },
+              "policy": {
+                "timeout": "0.01:00:00",
+                "retry": 0,
+                "retryIntervalInSeconds": 30
+              },
+              "name": "Log nothing to load",
+              "dependsOn": []
+            }
+          ]
+        },
+        "name": "If extract to load",
+        "dependsOn": [
+          {
+            "activity": "Resolve extract",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      }
+    ],
+    "parameters": {
+      "extract_id": {
+        "type": "string",
+        "defaultValue": ""
+      }
+    },
+    "variables": {
+      "run_id": {
+        "type": "String"
+      }
+    }
+  }
+}
