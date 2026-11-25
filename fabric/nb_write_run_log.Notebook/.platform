@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "nb_write_run_log",
+    "description": "Appends one row per pipeline run to ops.run_log, with row counts read from the tables."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "9ab9b053-81ab-8bb4-4571-8aa99f5c28d2"
+  }
+}
