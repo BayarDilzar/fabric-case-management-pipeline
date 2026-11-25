@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Lakehouse",
+    "displayName": "lh_gold",
+    "description": "Gold layer: the star schema and data trust tables that the reports read."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "301863a4-d314-9a73-441f-4452429d9211"
+  }
+}
