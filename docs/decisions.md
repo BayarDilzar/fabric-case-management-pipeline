@@ -121,3 +121,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** nb_load_silver checks one extract's rows as in M2, then merges the clean rows into Silver on the business key. A new key is inserted. A stored row is updated only when the incoming last_modified_at is newer. A reference row is updated only when a value differs. Reconciliation counts inserted, updated and unchanged rows, so that Bronze rows equal inserted plus updated plus unchanged plus duplicates removed plus quarantined.
 - **Alternatives:** Overwrite Silver on every run. Update on every key match.
 - **Reason:** A weekly extract holds only new and changed rows, so an overwrite would lose everything else. Updating on every match would let a rerun, or an older extract loaded late, replace newer data. With the guard, rerunning 2026-11-08 after 2026-11-15 updated no row: Silver kept its checksums and got no new Delta version, and episode E002680 kept the discharge it gained in 2026-11-15.
+
+## Copies with an unreadable timestamp are all quarantined
+
+- **Decision:** When several rows share a business key and any of them has an empty or unreadable last_modified_at, every copy is quarantined under DQ_<table>_DUP_BAD_TIMESTAMP, and none is counted as a removed duplicate.
+- **Alternatives:** Keep the copy with the latest readable timestamp. Keep the first copy in the file.
+- **Reason:** The newest copy cannot be told, so keeping one would be a guess, and the file order cannot be trusted. Before this rule, an unreadable timestamp on the newest copy made the older copy win and the newer one vanish as a duplicate. The test data has no such case, so the rule was tested with one injected row: both copies were quarantined and neither reached Silver.
