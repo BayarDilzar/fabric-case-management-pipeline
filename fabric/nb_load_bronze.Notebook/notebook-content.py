@@ -20,6 +20,13 @@
 # The pipeline passes extract_id. It is empty by default, so a run without it fails instead of guessing.
 extract_id = ""
 
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
 # CELL ********************
 
 import json
@@ -50,6 +57,36 @@ missing = [f"{LANDING}/{folder}/{file}" for _, folder, file, _ in loads if not n
 if missing:
     raise FileNotFoundError(f"No landed files for extract_id '{extract_id}'. Missing: {', '.join(missing)}")
 
+# The columns each file must have, from the generator spec. Checked before writing, because Spark would
+# load a file with a missing column and Delta would fill that column with null.
+EXPECTED_COLUMNS = {
+    "clients.csv": ["client_id", "birth_year", "sex", "local_authority_code", "last_modified_at"],
+    "episodes.csv": ["episode_id", "client_id", "service_code", "referral_date", "referral_source", "primary_substance",
+                     "triage_date", "discharge_date", "discharge_reason", "last_modified_at"],
+    "interventions.csv": ["intervention_id", "episode_id", "intervention_type", "start_date", "end_date", "last_modified_at"],
+    "reviews.csv": ["review_id", "episode_id", "review_date", "review_type", "days_used_last_28", "quality_of_life",
+                    "last_modified_at"],
+    "services.csv": ["service_code", "service_name", "local_authority_code"],
+    "code_lists.csv": ["list_name", "code", "label"],
+    "files.csv": ["extract_date", "seed", "file_name", "row_count", "sha256"],
+    "defects.csv": ["defect_id", "extract_date", "file_name", "record_key", "field", "defect_type", "injected_value",
+                    "expected_outcome", "expected_value", "expected_reason"],
+}
+problems = []
+for _, folder, file, _ in loads:
+    found = spark.read.option("header", True).csv(f"{LANDING}/{folder}/{file}").columns
+    problems += [f"{folder}/{file} is missing column {c}" for c in EXPECTED_COLUMNS[file] if c not in found]
+    problems += [f"{folder}/{file} has unexpected column {c}" for c in found if c not in EXPECTED_COLUMNS[file]]
+if problems:
+    raise ValueError(f"Schema check failed for extract_id '{extract_id}', so nothing was written: {'; '.join(problems)}.")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
 # CELL ********************
 
 # One timestamp for the whole run, so every row from this load carries the same value.
@@ -69,6 +106,13 @@ for table, folder, file, tag in loads:
     # Replace only this tag's rows: a rerun never duplicates, and other extracts stay as they are.
     rows.write.format("delta").mode("overwrite").option("replaceWhere", f"_extract_id = '{tag}'").saveAsTable(table)
 
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
 # CELL ********************
 
 loaded = {f"{table}/{tag}": spark.read.table(table).where(F.col("_extract_id") == tag).count() for table, _, _, tag in loads}
@@ -76,6 +120,20 @@ totals = {table: spark.read.table(table).count() for table in dict.fromkeys(tabl
 result = json.dumps({"extract_id": extract_id, "loaded": loaded, "totals": totals})
 print(result)
 
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
 # CELL ********************
 
 notebookutils.notebook.exit(result)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }

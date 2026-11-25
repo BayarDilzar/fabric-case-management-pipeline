@@ -3,7 +3,7 @@
   "metadata": {
     "type": "Notebook",
     "displayName": "nb_load_bronze",
-    "description": "Loads one landed extract into the Bronze tables as text, with load columns."
+    "description": "Checks the columns of one landed extract, then loads it into the Bronze tables as text, with load columns."
   },
   "config": {
     "version": "2.0",
