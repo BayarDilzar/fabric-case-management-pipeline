@@ -163,3 +163,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** People in treatment are distinct clients with an open episode, one with no discharge date, on the reporting date. New referrals are episodes counted by month of referral_date and by referral source. The wait to triage is triage_date minus referral_date for triaged episodes, reported as the median and the share within the threshold. A planned completion is discharge reason COMPLETED, out of discharged episodes. Primary substances are episodes by primary_substance, with each one's share of all episodes.
 - **Alternatives:** In treatment meaning a started intervention. Planned exits that include transfers. Counting untriaged episodes in the wait up to the reporting date.
 - **Reason:** Each definition uses fields the spec defines, so Python can recompute it from the CSVs; all six matched. The spec names COMPLETED the successful completion. An untriaged episode has no wait yet, so counting it would mix finished waits with waits still running. These are the fictional provider's own measures, not NDTMS statistics.
+
+## Data trust kept in Gold, including the current run
+
+- **Decision:** fact_extract_load takes, for each extract's latest loaded run, the rows loaded, values fixed, rows removed and rows quarantined from dq.reconciliation and dq.rule_results. A run counts as loaded when ops.run_log shows Succeeded, or when it is the run calling nb_load_gold, whose run log row is written after the Gold step.
+- **Alternatives:** Views on the SQL endpoint that read lh_silver directly. Succeeded runs only.
+- **Reason:** The semantic model reads only lh_gold, so the figures must be in Gold. With Succeeded runs only, Gold built inside a run would always miss that run, and a new extract would reach the report one run late. Tested: after the 2026-11-15 run, Gold showed that run as the last successful load.
