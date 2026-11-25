@@ -79,3 +79,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** nb_load_silver rebuilds every Silver table from one extract's Bronze rows and overwrites it. Every write goes through one function, so M3 can replace the Silver overwrite with a merge on the business key.
 - **Alternatives:** Build the merge now.
 - **Reason:** M2 has one extract, so a rebuild gives the same result as a merge with less code, and a rerun is simple. The weekly extracts that need a merge arrive in M3.
+
+## One orchestration pipeline
+
+- **Decision:** pl_load_extract runs one extract through four notebooks in order: nb_resolve_extract picks the extract, nb_load_bronze loads Bronze, nb_load_silver merges into Silver, and nb_write_run_log logs the run. It calls nb_load_bronze directly, and pl_load_bronze is deleted.
+- **Alternatives:** Call pl_load_bronze as a child pipeline. One notebook that runs the others with notebookutils.
+- **Reason:** The current Invoke pipeline activity needs a connection object with stored credentials, even inside one workspace, and the legacy activity is being replaced. pl_load_bronze only wrapped one notebook, so a child pipeline would add a credential and a second run in monitoring for no gain. Separate pipeline steps show which step failed, in monitoring and in the run log.
