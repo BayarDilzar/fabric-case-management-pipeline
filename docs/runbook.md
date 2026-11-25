@@ -5,20 +5,19 @@
 1. Resume the capacity if it is paused.
 2. Check the extract's four files are in lh_bronze under `Files/landing/extracts/<YYYY-MM-DD>/`, and its manifest under `Files/landing/manifests/<YYYY-MM-DD>/`.
 3. Open pl_load_extract and select Run. Leave extract_id empty.
-4. Wait for the run to finish in Monitor. A run takes 7 to 9 minutes.
-5. Read the run log as below. The newest row shows the extract id and status Succeeded.
+4. Wait for the run to finish in Monitor. A run takes 9 to 10 minutes. A second run started meanwhile waits in the queue until this one ends.
+5. Read the run log as below. The newest row shows the extract id and status Succeeded. Gold and the semantic model now include that extract.
 6. Repeat from step 3 until the newest row shows status Nothing to load, or a run fails.
 7. Pause the capacity if you are stopping.
 
 ## Rerun one extract
 
-1. Check in the run log that every older extract shows status Succeeded. Loading a newer extract first quarantines its new rows whose parents are in the older one.
-2. Open pl_load_extract and select Run.
-3. Set extract_id to the extract date, for example 2026-11-08.
-4. Wait for the run to finish in Monitor.
+1. Open pl_load_extract and select Run.
+2. Set extract_id to the extract date, for example 2026-11-08.
+3. Wait for the run to finish in Monitor.
+4. If the run failed at Resolve extract with "Cannot load", an older landed extract has no Succeeded run. The message names it. Run pl_load_extract with extract_id empty to load it first, then go back to step 1.
 5. Check the newest run log row shows that extract id and status Succeeded.
 6. In dq.reconciliation, filter on the new run_id. Expect inserted and updated to be 0 for every table, unless the landed files changed.
-7. If a newer extract was loaded before an older one, rerun the newer one after the older one has loaded.
 
 ## Read the run log
 
@@ -35,8 +34,16 @@
 1. Find the Failed row in ops.run_log. Read failed_step and error_message.
 2. If error_message contains "Schema check failed", a file has a missing or extra column. The message names the file and the column. Nothing was written. Get a corrected file from the source, land it in the same folder, and go to step 6.
 3. If error_message contains "No landed files", land the missing files named in the message and go to step 6.
-4. If failed_step is Load Silver, read the errorValue part of error_message. For more detail, open the run in Monitor, open the Load Silver activity and open its notebook snapshot.
+4. If failed_step is Load Silver or Load Gold, read the errorValue part of error_message. For more detail, open the run in Monitor, open that activity and open its notebook snapshot.
 5. Fix the cause.
 6. Run pl_load_extract with extract_id empty. The resolver picks the failed extract again, because it has no Succeeded row.
 7. Check the newest run log row shows status Succeeded.
 8. If Monitor shows a failed run with no run log row, the run stopped before its log step. Go to step 6.
+
+## Deploy the reporting views
+
+1. Install the development requirements into the project's virtual environment: `pip install -r requirements-dev.txt`.
+2. Sign in with `az login`, using an account with Contributor access to the workspace.
+3. Run `python sql/deploy_views.py <workspace name>`. It deploys every file in `sql/reporting/` to the lh_gold SQL analytics endpoint.
+4. Check the last line lists the six views in the reporting schema.
+5. After changing a .sql file, run step 3 again. Each file replaces its view.
