@@ -157,3 +157,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** Gold's reporting date is the cut-off of the latest loaded extract, never today. The wait threshold is a parameter of nb_load_gold, 21 days by default. Both are stored in report_settings, which the views and the model read.
 - **Alternatives:** Today's date. The threshold typed into each view and measure.
 - **Reason:** With today's date the same data would give different answers on different days, and the length of stay of open episodes would grow while nothing loaded. One stored threshold keeps the views and the model in step. 21 days is a local target, not a claimed national standard.
+
+## How each question is measured
+
+- **Decision:** People in treatment are distinct clients with an open episode, one with no discharge date, on the reporting date. New referrals are episodes counted by month of referral_date and by referral source. The wait to triage is triage_date minus referral_date for triaged episodes, reported as the median and the share within the threshold. A planned completion is discharge reason COMPLETED, out of discharged episodes. Primary substances are episodes by primary_substance, with each one's share of all episodes.
+- **Alternatives:** In treatment meaning a started intervention. Planned exits that include transfers. Counting untriaged episodes in the wait up to the reporting date.
+- **Reason:** Each definition uses fields the spec defines, so Python can recompute it from the CSVs; all six matched. The spec names COMPLETED the successful completion. An untriaged episode has no wait yet, so counting it would mix finished waits with waits still running. These are the fictional provider's own measures, not NDTMS statistics.
