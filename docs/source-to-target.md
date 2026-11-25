@@ -1,4 +1,6 @@
-# Source to target: Bronze to Silver
+# Source to target
+
+## Bronze to Silver
 
 Bronze is lh_bronze.dbo, all text. Silver is lh_silver.dbo. A row that fails any quarantined rule goes to dq.quarantine instead of Silver. Clean rows are merged into Silver on the business key: a new key is inserted, and a stored row is updated only by a newer last_modified_at.
 
@@ -50,3 +52,37 @@ Bronze is lh_bronze.dbo, all text. Silver is lh_silver.dbo. A row that fails any
 | code_lists.label | code_lists.label | string | Trimmed. A stored row is updated when this differs | none |
 | code_lists._extract_id | code_lists._extract_id | string | Copied | none |
 | none | code_lists._run_id | string | Run that last inserted or updated the row | none |
+
+## Silver to Gold
+
+Silver is lh_silver.dbo, with dq and ops in lh_silver. Gold is lh_gold.dbo. nb_load_gold rebuilds every Gold table in full on each run.
+
+| Silver table and column | Gold table and column | Target type | Transformation |
+|---|---|---|---|
+| ops.run_log.extract_id of Succeeded runs and of the current run | report_settings.reporting_date | date | Latest loaded extract id, read as a date |
+| nb_load_gold parameter wait_threshold_days | report_settings.wait_threshold_days | int | 21 unless the notebook is run with another value |
+| none | report_settings.built_at | timestamp | Time of the rebuild, UTC |
+| nb_load_gold parameter run_id | report_settings.built_by_run_id | string | The pipeline run that rebuilt Gold. Empty for a direct run |
+| episodes.referral_date, report_settings.reporting_date | dim_date.calendar_date | date | One row per day from the first referral to the reporting date |
+| dim_date.calendar_date | dim_date.year, dim_date.month, dim_date.month_start, dim_date.year_month | int, int, date, string | Year, month number, first day of the month, and the month written yyyy-MM |
+| services.service_code, services.service_name, services.local_authority_code | dim_service.service_code, dim_service.service_name, dim_service.local_authority_code | string | Copied |
+| code_lists.code, code_lists.label where list_name is referral_source | dim_referral_source.referral_source, dim_referral_source.referral_source_label | string | Copied |
+| code_lists.code, code_lists.label where list_name is substance | dim_substance.primary_substance, dim_substance.substance_label | string | Copied |
+| code_lists.code, code_lists.label where list_name is discharge_reason | dim_discharge_reason.discharge_reason, dim_discharge_reason.discharge_reason_label | string | Copied |
+| code_lists.code where list_name is discharge_reason | dim_discharge_reason.is_planned_completion | boolean | True for COMPLETED |
+| clients.client_id, clients.sex, clients.birth_year | dim_client.client_id, dim_client.sex, dim_client.birth_year | string, string, int | Copied |
+| code_lists.label where list_name is sex | dim_client.sex_label | string | Label of the client's sex code |
+| clients.birth_year, episodes.referral_date | dim_client.age_band_at_first_referral | string | Year of the client's first referral minus birth_year, as 18 to 24, 25 to 34, 35 to 44, 45 to 54, 55 to 64 or 65 and over. Not known when the client has no episode |
+| episodes.episode_id, client_id, service_code, referral_source, primary_substance, discharge_reason | fact_episode, the same column names | string | Copied. One row per Silver episode |
+| episodes.referral_date, triage_date, discharge_date | fact_episode, the same column names | date | Copied |
+| episodes.triage_date, episodes.referral_date | fact_episode.wait_days | int | Days from referral to triage. Empty when not yet triaged |
+| episodes.discharge_date, episodes.referral_date, report_settings.reporting_date | fact_episode.length_of_stay_days | int | Days from referral to discharge, or to the reporting date while open |
+| episodes.discharge_date | fact_episode.is_open | boolean | True when discharge_date is empty |
+| episodes.discharge_reason | fact_episode.is_planned_completion | boolean | True for COMPLETED, false otherwise and while open |
+| fact_episode.wait_days, report_settings.wait_threshold_days | fact_episode.is_seen_within_threshold | boolean | True when wait_days is at most the threshold. Empty when not yet triaged |
+| ops.run_log.run_id of each extract's latest loaded run | fact_extract_load.extract_id, fact_extract_load.run_id | string | One row per loaded extract |
+| fact_extract_load.run_id | fact_extract_load.run_started_at | timestamp | Read from the run id, UTC |
+| dq.reconciliation.bronze_rows | fact_extract_load.rows_loaded | bigint | Sum over clients, episodes, interventions and reviews for that run |
+| dq.rule_results.rows_failed where action is fixed | fact_extract_load.values_fixed | bigint | Sum for that run |
+| dq.reconciliation.duplicates_removed | fact_extract_load.rows_removed | bigint | Sum over the four source tables for that run |
+| dq.reconciliation.quarantined | fact_extract_load.rows_quarantined | bigint | Sum over the four source tables for that run |
