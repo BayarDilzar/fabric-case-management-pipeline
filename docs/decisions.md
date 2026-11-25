@@ -109,3 +109,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** Each notebook step in pl_load_extract has its own failure branch: a run log row with status Failed, the step name and the error message, then a Fail activity with the same message. The Fail activity runs whether or not the log row was written.
 - **Alternatives:** No failure branch. A failure branch with the log step only.
 - **Reason:** When a failed activity is handled by a branch that succeeds, monitoring shows the whole run as Succeeded. The Fail activity keeps a failed load Failed. A branch per step records which step failed without parsing the message.
+
+## Schedule created but switched off
+
+- **Decision:** pl_load_extract has a daily schedule at 20:00 UK time, ending 30 November 2026. It uses the time zone GMT Standard Time, so it follows British Summer Time. It is switched off.
+- **Alternatives:** Switch it on. No schedule.
+- **Reason:** The capacity is paused most of the time, so live scheduled runs would only fail and fill the run log with failures. The schedule shows how the load would run unattended, and the resolver makes a run with no extract_id safe. Scheduling works on this F2 capacity: the schedule was created and read back through the API on 25 November 2026.
