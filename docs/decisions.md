@@ -127,3 +127,63 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** When several rows share a business key and any of them has an empty or unreadable last_modified_at, every copy is quarantined under DQ_<table>_DUP_BAD_TIMESTAMP, and none is counted as a removed duplicate.
 - **Alternatives:** Keep the copy with the latest readable timestamp. Keep the first copy in the file.
 - **Reason:** The newest copy cannot be told, so keeping one would be a guess, and the file order cannot be trusted. Before this rule, an unreadable timestamp on the newest copy made the older copy win and the newer one vanish as a duplicate. The test data has no such case, so the rule was tested with one injected row: both copies were quarantined and neither reached Silver.
+
+## An explicit extract must follow the load order
+
+- **Decision:** nb_resolve_extract refuses an explicit extract_id when any older landed extract has no Succeeded run, and names those extracts. A rerun of an extract whose older extracts all succeeded is allowed. An explicit extract_id must also be a date.
+- **Alternatives:** A runbook step only, as in M3. Checking quarantined orphans again when their parent arrives later.
+- **Reason:** Loading a newer extract before an older one quarantines its new rows whose parents are in the older one, and loading the older one later does not check them again. Refusing the run is one check in the resolver; checking quarantined rows again would change Silver's checks. Tested with a scratch copy whose run log hid 2026-11-08: 2026-11-15 was refused with a message naming 2026-11-08.
+
+## One pipeline run at a time
+
+- **Decision:** pl_load_extract has its concurrency set to 1. A run started while another is going waits in the queue.
+- **Alternatives:** No limit, relying on Delta conflicts. A lock row in the run log.
+- **Reason:** Two runs at once would load the same extract in parallel; one would fail on a Delta conflict and log Failed although the other succeeded. The pipeline setting needs no code. Tested: a run started 20 seconds after another stayed NotStarted until the first completed. The time in the queue counts in that run's duration_seconds, because a run is timed from its trigger time.
+
+## Gold lakehouse with a small star schema
+
+- **Decision:** lh_gold has schemas on and its tables in dbo. fact_episode holds one row per Silver episode with wait days, length of stay, and flags for open, planned completion and seen within the wait threshold. The dimensions are dim_client, dim_service, dim_date, and one per code list a question needs: dim_referral_source, dim_substance and dim_discharge_reason. fact_extract_load holds the data trust figures per extract, and report_settings the reporting date and wait threshold.
+- **Alternatives:** One wide reporting table. Gold as views over Silver. A gold schema inside lh_silver.
+- **Reason:** In a star each question is a count on one fact filtered by one dimension, which is the shape a semantic model expects. Gold is tables, not views, because Direct Lake reads Delta tables. A separate lakehouse follows the one-lakehouse-per-layer decision. Only tables an M4 question needs were built, so the client journey stages in the plan are left out.
+
+## Gold rebuilt in full on every run
+
+- **Decision:** nb_load_gold rebuilds every Gold table from Silver with CREATE OR REPLACE TABLE on every run. It is the last load step of pl_load_extract, with the same log-then-fail branch as the other steps.
+- **Alternatives:** Merge Gold incrementally, as Silver is. Rebuild Gold on its own schedule.
+- **Reason:** Gold is small: 2,683 episodes and 2,090 clients after four extracts, rebuilt in 28 to 73 seconds in test runs. A full rebuild is simpler and always consistent with Silver, and a rerun gives the same tables. CREATE OR REPLACE keeps each table's Delta history. As the last load step, Gold changes only after Bronze and Silver have succeeded.
+
+## Reporting date and wait threshold in report_settings
+
+- **Decision:** Gold's reporting date is the cut-off of the latest loaded extract, never today. The wait threshold is a parameter of nb_load_gold, 21 days by default. Both are stored in report_settings, which the views and the model read.
+- **Alternatives:** Today's date. The threshold typed into each view and measure.
+- **Reason:** With today's date the same data would give different answers on different days, and the length of stay of open episodes would grow while nothing loaded. One stored threshold keeps the views and the model in step. 21 days is a local target, not a claimed national standard.
+
+## How each question is measured
+
+- **Decision:** People in treatment are distinct clients with an open episode, one with no discharge date, on the reporting date. New referrals are episodes counted by month of referral_date and by referral source. The wait to triage is triage_date minus referral_date for triaged episodes, reported as the median and the share within the threshold. A planned completion is discharge reason COMPLETED, out of discharged episodes. Primary substances are episodes by primary_substance, with each one's share of all episodes.
+- **Alternatives:** In treatment meaning a started intervention. Planned exits that include transfers. Counting untriaged episodes in the wait up to the reporting date.
+- **Reason:** Each definition uses fields the spec defines, so Python can recompute it from the CSVs; all six matched. The spec names COMPLETED the successful completion. An untriaged episode has no wait yet, so counting it would mix finished waits with waits still running. These are the fictional provider's own measures, not NDTMS statistics.
+
+## Data trust kept in Gold, including the current run
+
+- **Decision:** fact_extract_load takes, for each extract's latest loaded run, the rows loaded, values fixed, rows removed and rows quarantined from dq.reconciliation and dq.rule_results. A run counts as loaded when ops.run_log shows Succeeded, or when it is the run calling nb_load_gold, whose run log row is written after the Gold step.
+- **Alternatives:** Views on the SQL endpoint that read lh_silver directly. Succeeded runs only.
+- **Reason:** The semantic model reads only lh_gold, so the figures must be in Gold. With Succeeded runs only, Gold built inside a run would always miss that run, and a new extract would reach the report one run late. Tested: after the 2026-11-15 run, Gold showed that run as the last successful load.
+
+## Reporting views kept as files and deployed by a script
+
+- **Decision:** Each view in the reporting schema of the lh_gold SQL analytics endpoint is a .sql file in sql/reporting/, named after its view. sql/deploy_views.py deploys them with mssql-python and an Azure CLI token, and finds the endpoint by name. A test checks that each file creates the view it is named after.
+- **Alternatives:** Views created by hand in the portal. A Fabric notebook holding the view text. pyodbc with an ODBC driver.
+- **Reason:** Files keep each view's text in the repo, where it is reviewed with the rest of the code. A notebook would hold a second copy of every view. mssql-python is Microsoft's driver and needs no separate ODBC install; this machine had only the old SQL Server driver, which cannot use Entra tokens. The script stores no server name or ID.
+
+## Direct Lake semantic model
+
+- **Decision:** sm_case_management reads the lh_gold Delta tables in Direct Lake mode through one OneLake connection. It has nine tables with business names, six single-direction relationships from Episodes, hidden keys, and one or two measures per question. It was written as TMDL and deployed through the Fabric REST API.
+- **Alternatives:** Import mode with a scheduled refresh. DirectQuery against the SQL endpoint. Building it with the Power BI modeling server.
+- **Reason:** Direct Lake reads the Delta files themselves, so there is no copy of Gold to refresh: a refresh only points the model at the latest table versions, and took about 3 seconds. Import would hold a second copy and need its own schedule. The modeling server needs its licence terms accepted for the user, so the model was written as TMDL instead. Its files reach fabric/ when the model is committed from Source control.
+
+## Report built by hand from a guide
+
+- **Decision:** The two-page report, Service overview and Data quality, is built in the browser on sm_case_management, following a written click-by-click guide.
+- **Alternatives:** Writing the report files through the report skill.
+- **Reason:** The report skill writes and checks report files with its powerbi-report-author tool, which is not installed here, and it does not guess the file format without it. Every figure on the report comes from a measure already checked against its view, so building by hand adds no risk to the numbers.
