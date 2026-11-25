@@ -115,3 +115,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** pl_load_extract has a daily schedule at 20:00 UK time, ending 30 November 2026. It uses the time zone GMT Standard Time, so it follows British Summer Time. It is switched off.
 - **Alternatives:** Switch it on. No schedule.
 - **Reason:** The capacity is paused most of the time, so live scheduled runs would only fail and fill the run log with failures. The schedule shows how the load would run unattended, and the resolver makes a run with no extract_id safe. Scheduling works on this F2 capacity: the schedule was created and read back through the API on 25 November 2026.
+
+## Merge into Silver with a last_modified_at guard
+
+- **Decision:** nb_load_silver checks one extract's rows as in M2, then merges the clean rows into Silver on the business key. A new key is inserted. A stored row is updated only when the incoming last_modified_at is newer. A reference row is updated only when a value differs. Reconciliation counts inserted, updated and unchanged rows, so that Bronze rows equal inserted plus updated plus unchanged plus duplicates removed plus quarantined.
+- **Alternatives:** Overwrite Silver on every run. Update on every key match.
+- **Reason:** A weekly extract holds only new and changed rows, so an overwrite would lose everything else. Updating on every match would let a rerun, or an older extract loaded late, replace newer data. With the guard, rerunning 2026-11-08 after 2026-11-15 updated no row: Silver kept its checksums and got no new Delta version, and episode E002680 kept the discharge it gained in 2026-11-15.
