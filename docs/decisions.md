@@ -79,3 +79,51 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** nb_load_silver rebuilds every Silver table from one extract's Bronze rows and overwrites it. Every write goes through one function, so M3 can replace the Silver overwrite with a merge on the business key.
 - **Alternatives:** Build the merge now.
 - **Reason:** M2 has one extract, so a rebuild gives the same result as a merge with less code, and a rerun is simple. The weekly extracts that need a merge arrive in M3.
+
+## One orchestration pipeline
+
+- **Decision:** pl_load_extract runs one extract through four notebooks in order: nb_resolve_extract picks the extract, nb_load_bronze loads Bronze, nb_load_silver merges into Silver, and nb_write_run_log logs the run. It calls nb_load_bronze directly, and pl_load_bronze is deleted.
+- **Alternatives:** Call pl_load_bronze as a child pipeline. One notebook that runs the others with notebookutils.
+- **Reason:** The current Invoke pipeline activity needs a connection object with stored credentials, even inside one workspace, and the legacy activity is being replaced. pl_load_bronze only wrapped one notebook, so a child pipeline would add a credential and a second run in monitoring for no gain. Separate pipeline steps show which step failed, in monitoring and in the run log.
+
+## The resolver loads the oldest extract not yet loaded
+
+- **Decision:** With no extract_id, nb_resolve_extract lists the date folders under Files/landing/extracts and returns the oldest one that has no Succeeded row in ops.run_log. With an extract_id it returns that one. When nothing is left, the pipeline logs Nothing to load and ends as Succeeded.
+- **Alternatives:** The newest landed extract. A separate control table of loaded extracts. Get Metadata and Filter activities in the pipeline.
+- **Reason:** A schedule passes no extract date, so the pipeline has to work out what comes next. Loading in date order keeps Silver in step with the source. Only a Succeeded run counts, so a failed or half-finished load is tried again and a broken extract is never skipped. The run log already records success, so no second table is needed. Pipeline expressions cannot sort, so the choice is made in Python.
+
+## Run log in ops.run_log
+
+- **Decision:** ops.run_log in lh_silver holds one row per pipeline run: run id, pipeline run id, extract id, trigger type, start and end time, duration, status, failed step, error message, and three counts: the extract's rows in Bronze, the rows in Silver and the extract's quarantined rows. nb_write_run_log writes the row as the last step, on success and on failure. The run id is the pipeline's trigger time in UTC, and nb_load_silver uses the same id in the dq tables.
+- **Alternatives:** The pipeline run history in monitoring. A row written at the start and updated at the end.
+- **Reason:** Monitoring history is not a table, so the resolver cannot read it, and it holds no row counts. A row written once at the end needs no update. A run that stops before its log step, for example when the capacity pauses, leaves no row, so the resolver tries that extract again. The counts are read from the tables, so a failed run shows what it left behind. Fabric is reported to give Manual as the trigger type of scheduled runs too, so a scheduled run may be logged as manual; this cannot be tested while the schedule is off.
+
+## Schema check before writing Bronze
+
+- **Decision:** nb_load_bronze reads the header of every file it is about to load and compares it with the columns in the generator spec. A missing or extra column fails the run, naming the file and the column, before any table is written.
+- **Alternatives:** Let Delta fill a missing column with null. Check only the four extract files. Check in Silver.
+- **Reason:** Spark loads a file with a missing column without complaint, so the broken extract 2026-11-22 would reach Silver with every end_date empty. Checking every file the run reads, the reference files and manifest included, keeps one rule: nothing is written unless everything matches. A check in Silver would come too late, because Bronze would already hold the rows.
+
+## Log the failure, then fail the pipeline
+
+- **Decision:** Each notebook step in pl_load_extract has its own failure branch: a run log row with status Failed, the step name and the error message, then a Fail activity with the same message. The Fail activity runs whether or not the log row was written.
+- **Alternatives:** No failure branch. A failure branch with the log step only.
+- **Reason:** When a failed activity is handled by a branch that succeeds, monitoring shows the whole run as Succeeded. The Fail activity keeps a failed load Failed. A branch per step records which step failed without parsing the message.
+
+## Schedule created but switched off
+
+- **Decision:** pl_load_extract has a daily schedule at 20:00 UK time, ending 30 November 2026. It uses the time zone GMT Standard Time, so it follows British Summer Time. It is switched off.
+- **Alternatives:** Switch it on. No schedule.
+- **Reason:** The capacity is paused most of the time, so live scheduled runs would only fail and fill the run log with failures. The schedule shows how the load would run unattended, and the resolver makes a run with no extract_id safe. Scheduling works on this F2 capacity: the schedule was created and read back through the API on 25 November 2026.
+
+## Merge into Silver with a last_modified_at guard
+
+- **Decision:** nb_load_silver checks one extract's rows as in M2, then merges the clean rows into Silver on the business key. A new key is inserted. A stored row is updated only when the incoming last_modified_at is newer. A reference row is updated only when a value differs. Reconciliation counts inserted, updated and unchanged rows, so that Bronze rows equal inserted plus updated plus unchanged plus duplicates removed plus quarantined.
+- **Alternatives:** Overwrite Silver on every run. Update on every key match.
+- **Reason:** A weekly extract holds only new and changed rows, so an overwrite would lose everything else. Updating on every match would let a rerun, or an older extract loaded late, replace newer data. With the guard, rerunning 2026-11-08 after 2026-11-15 updated no row: Silver kept its checksums and got no new Delta version, and episode E002680 kept the discharge it gained in 2026-11-15.
+
+## Copies with an unreadable timestamp are all quarantined
+
+- **Decision:** When several rows share a business key and any of them has an empty or unreadable last_modified_at, every copy is quarantined under DQ_<table>_DUP_BAD_TIMESTAMP, and none is counted as a removed duplicate.
+- **Alternatives:** Keep the copy with the latest readable timestamp. Keep the first copy in the file.
+- **Reason:** The newest copy cannot be told, so keeping one would be a guess, and the file order cannot be trusted. Before this rule, an unreadable timestamp on the newest copy made the older copy win and the newer one vanish as a duplicate. The test data has no such case, so the rule was tested with one injected row: both copies were quarantined and neither reached Silver.
