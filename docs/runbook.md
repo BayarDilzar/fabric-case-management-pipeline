@@ -12,11 +12,13 @@
 
 ## Rerun one extract
 
-1. Open pl_load_extract and select Run.
-2. Set extract_id to the extract date, for example 2026-11-08.
-3. Wait for the run to finish in Monitor.
-4. Check the newest run log row shows that extract id and status Succeeded.
-5. In dq.reconciliation, filter on the new run_id. Expect inserted and updated to be 0 for every table, unless the landed files changed.
+1. Check in the run log that every older extract shows status Succeeded. Loading a newer extract first quarantines its new rows whose parents are in the older one.
+2. Open pl_load_extract and select Run.
+3. Set extract_id to the extract date, for example 2026-11-08.
+4. Wait for the run to finish in Monitor.
+5. Check the newest run log row shows that extract id and status Succeeded.
+6. In dq.reconciliation, filter on the new run_id. Expect inserted and updated to be 0 for every table, unless the landed files changed.
+7. If a newer extract was loaded before an older one, rerun the newer one after the older one has loaded.
 
 ## Read the run log
 
