@@ -181,3 +181,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** sm_case_management reads the lh_gold Delta tables in Direct Lake mode through one OneLake connection. It has nine tables with business names, six single-direction relationships from Episodes, hidden keys, and one or two measures per question. It was written as TMDL and deployed through the Fabric REST API.
 - **Alternatives:** Import mode with a scheduled refresh. DirectQuery against the SQL endpoint. Building it with the Power BI modeling server.
 - **Reason:** Direct Lake reads the Delta files themselves, so there is no copy of Gold to refresh: a refresh only points the model at the latest table versions, and took about 3 seconds. Import would hold a second copy and need its own schedule. The modeling server needs its licence terms accepted for the user, so the model was written as TMDL instead. Its files reach fabric/ when the model is committed from Source control.
+
+## Report built by hand from a guide
+
+- **Decision:** The two-page report, Service overview and Data quality, is built in the browser on sm_case_management, following a written click-by-click guide.
+- **Alternatives:** Writing the report files through the report skill.
+- **Reason:** The report skill writes and checks report files with its powerbi-report-author tool, which is not installed here, and it does not guess the file format without it. Every figure on the report comes from a measure already checked against its view, so building by hand adds no risk to the numbers.
