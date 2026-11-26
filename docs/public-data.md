@@ -47,7 +47,7 @@ pl_load_public_data runs two notebooks. Each layer has its own table per source.
 | Layer | Where | Written by | What happens |
 |---|---|---|---|
 | Landing | lh_bronze, `Files/public/<source>/<release>/<file>` | nb_land_public_data | The file as downloaded inside Fabric, unchanged. A file already landed for that release is kept, and a download with a different sha256 stops the run before anything is written. |
-| Bronze | lh_bronze.reference.deprivation_lad, drug_poisoning_deaths_lad, local_authority | nb_load_public_data | Every row of the source sheet, every column as text, plus _source_file, _source_url, _source_release, _sha256 and _loaded_at. Replaced on every run. |
+| Bronze | lh_bronze.reference.deprivation_lad, drug_poisoning_deaths_lad, local_authority | nb_load_public_data | Every data row of the source sheet, every column as text, plus _source_file, _source_url, _source_release, _sha256 and _loaded_at. Replaced on every run. |
 | Silver | lh_silver.reference.local_authority, deprivation_lad, drug_poisoning_deaths_lad | nb_load_public_data | Trimmed and typed. English district codes only (E06, E07, E08, E09). A rate ONS did not calculate is null, with its marker kept. |
 | Gold | lh_gold.dbo.dim_local_authority | nb_load_public_data | One row per district in the lookup, with its region, deprivation and drug poisoning figures. Joins to dim_service on local_authority_code. |
 
