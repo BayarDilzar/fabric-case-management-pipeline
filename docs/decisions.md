@@ -205,3 +205,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** The Bronze and Silver public tables sit in a reference schema in lh_bronze and lh_silver. The one Gold table, dim_local_authority, sits in lh_gold.dbo next to dim_service.
 - **Alternatives:** The dbo schema in every lakehouse. A separate lakehouse for public data.
 - **Reason:** The demo tables in dbo, dq and ops stay untouched, and the schema shows which tables hold public reference data rather than extracts. Gold keeps all its tables in dbo, so the new dimension sits with the star it joins. Before creating it I read the live nb_load_gold: it rebuilds only its nine named tables with CREATE OR REPLACE and drops nothing, so its full rebuild leaves dim_local_authority alone.
+
+## All drug poisoning deaths, not drug misuse
+
+- **Decision:** The deaths figures come from Table 3 of the ONS workbook: all drug poisoning, persons, for the latest three year period, 2023 to 2025.
+- **Alternatives:** Table 6, the headline drug misuse measure, which the earlier M5 plan named. Both tables.
+- **Reason:** The M5 design names the source, the Silver table and the Gold fields as drug poisoning deaths, and Table 3 is that measure. ONS note 2 says "misuse is a subset", so the two cannot be added, and loading both would double the columns for one comparison. Table 6 has the same layout as Table 3, so changing to it means changing only the sheet name in nb_load_public_data.
