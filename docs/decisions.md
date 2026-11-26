@@ -223,3 +223,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** Each public source has a release folder in Landing. nb_land_public_data downloads every file and compares its sha256 with the file already landed for that release. Any difference stops the run before anything is written. A file is written only into a release folder that is still empty.
 - **Alternatives:** A sha256 for each release written into the notebook. Overwriting the landed file on every run.
 - **Reason:** The landed file is its own record, so there is no second copy of the sha256 to keep in step. Overwriting would let the ONS "current" link replace the 2025 edition without anyone noticing. Tested in a Livy session with the deprivation release pointed at a different file: the run stopped and named both sha256 values, and the landed file kept its sha256 and its modified time.
+
+## Bronze column names made from the headers
+
+- **Decision:** Each public Bronze column is named from its header: any `[note n]` removed, lower case, and each run of other characters turned into one underscore. The run stops if two headers give the same name. The exact headers are listed in docs/public-data.md.
+- **Alternatives:** Delta column mapping, which keeps the headers as they are. Names typed in by hand.
+- **Reason:** The headers hold spaces, commas, brackets and line breaks, which a Delta column name cannot hold without column mapping. With column mapping every query would have to quote names with line breaks in them. A fixed rule gives the same names on every run and needs no change when ONS adds a period.
