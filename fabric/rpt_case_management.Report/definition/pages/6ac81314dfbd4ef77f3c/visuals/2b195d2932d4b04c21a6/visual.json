@@ -1,0 +1,122 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.15.0/schema.json",
+  "name": "2b195d2932d4b04c21a6",
+  "position": {
+    "x": 341.45511430688589,
+    "y": 497.006888602245,
+    "z": 2,
+    "height": 239,
+    "width": 618,
+    "tabOrder": 2
+  },
+  "visual": {
+    "visualType": "clusteredColumnChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Extract Loads"
+                    }
+                  },
+                  "Property": "Extract"
+                }
+              },
+              "queryRef": "Extract Loads.Extract",
+              "nativeQueryRef": "Extract",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Extract Loads"
+                    }
+                  },
+                  "Property": "# Rows Quarantined"
+                }
+              },
+              "queryRef": "Extract Loads.# Rows Quarantined",
+              "nativeQueryRef": "# Rows Quarantined"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "Extract Loads"
+                  }
+                },
+                "Property": "# Rows Quarantined"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    },
+    "objects": {
+      "labels": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "e2769b1134cc4233af17",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Extract Loads"
+              }
+            },
+            "Property": "Extract"
+          }
+        },
+        "type": "Categorical"
+      },
+      {
+        "name": "8afcbd25148f81fa11cd",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Extract Loads"
+              }
+            },
+            "Property": "# Rows Quarantined"
+          }
+        },
+        "type": "Advanced"
+      }
+    ]
+  }
+}

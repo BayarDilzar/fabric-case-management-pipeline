@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.15.0/schema.json",
+  "name": "4eca058ed2fdf36883a5",
+  "position": {
+    "x": 608.92828718061321,
+    "y": 53.115240003293358,
+    "z": 3,
+    "height": 303.51565716167636,
+    "width": 652.55866289760411,
+    "tabOrder": 3
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "textRuns": [
+                  {
+                    "value": "Data quality: every extract is reconciled from Bronze to Silver",
+                    "textStyle": {
+                      "fontWeight": "bold",
+                      "fontSize": "24pt"
+                    }
+                  }
+                ],
+                "horizontalTextAlignment": "center"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

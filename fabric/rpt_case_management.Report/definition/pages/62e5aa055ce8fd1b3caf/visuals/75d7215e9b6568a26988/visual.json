@@ -1,0 +1,107 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.15.0/schema.json",
+  "name": "75d7215e9b6568a26988",
+  "position": {
+    "x": 627.89801575321792,
+    "y": 806.21346433570272,
+    "z": 2,
+    "height": 274,
+    "width": 708,
+    "tabOrder": 2
+  },
+  "visual": {
+    "visualType": "lineChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Date"
+                    }
+                  },
+                  "Property": "Month Start"
+                }
+              },
+              "queryRef": "Date.Month Start",
+              "nativeQueryRef": "Month Start",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Episodes"
+                    }
+                  },
+                  "Property": "# Referrals"
+                }
+              },
+              "queryRef": "Episodes.# Referrals",
+              "nativeQueryRef": "# Referrals"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Column": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "Date"
+                  }
+                },
+                "Property": "Month Start"
+              }
+            },
+            "direction": "Ascending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "c32410002185248eb186",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Date"
+              }
+            },
+            "Property": "Month Start"
+          }
+        },
+        "type": "Categorical"
+      },
+      {
+        "name": "9f37054da568dc4b6203",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Episodes"
+              }
+            },
+            "Property": "# Referrals"
+          }
+        },
+        "type": "Advanced"
+      }
+    ]
+  }
+}

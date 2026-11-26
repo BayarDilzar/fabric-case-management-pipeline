@@ -1,0 +1,56 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.15.0/schema.json",
+  "name": "51aee2e4229dd5428d1e",
+  "position": {
+    "x": 1153.35949721437,
+    "y": 128.99415429371246,
+    "z": 4,
+    "height": 286,
+    "width": 341,
+    "tabOrder": 4
+  },
+  "visual": {
+    "visualType": "cardVisual",
+    "query": {
+      "queryState": {
+        "Data": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Episodes"
+                    }
+                  },
+                  "Property": "Seen Within Threshold (%)"
+                }
+              },
+              "queryRef": "Episodes.Seen Within Threshold (%)",
+              "nativeQueryRef": "Seen Within Threshold (%)"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "98785aef0d4f02cd39fc",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Episodes"
+              }
+            },
+            "Property": "Seen Within Threshold (%)"
+          }
+        },
+        "type": "Advanced"
+      }
+    ]
+  }
+}

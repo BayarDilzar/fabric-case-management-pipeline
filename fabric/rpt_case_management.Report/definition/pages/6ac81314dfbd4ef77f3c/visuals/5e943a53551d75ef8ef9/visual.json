@@ -1,0 +1,196 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.15.0/schema.json",
+  "name": "5e943a53551d75ef8ef9",
+  "position": {
+    "x": 542.5342371764965,
+    "y": 204.87306858413152,
+    "z": 0,
+    "height": 292.13382001811345,
+    "width": 863.12265005351708,
+    "tabOrder": 0
+  },
+  "visual": {
+    "visualType": "tableEx",
+    "query": {
+      "queryState": {
+        "Values": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Extract Loads"
+                    }
+                  },
+                  "Property": "Extract"
+                }
+              },
+              "queryRef": "Extract Loads.Extract",
+              "nativeQueryRef": "Extract"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Extract Loads"
+                    }
+                  },
+                  "Property": "# Rows Loaded"
+                }
+              },
+              "queryRef": "Extract Loads.# Rows Loaded",
+              "nativeQueryRef": "# Rows Loaded"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Extract Loads"
+                    }
+                  },
+                  "Property": "# Rows Quarantined"
+                }
+              },
+              "queryRef": "Extract Loads.# Rows Quarantined",
+              "nativeQueryRef": "# Rows Quarantined"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Extract Loads"
+                    }
+                  },
+                  "Property": "# Values Fixed"
+                }
+              },
+              "queryRef": "Extract Loads.# Values Fixed",
+              "nativeQueryRef": "# Values Fixed"
+            },
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Extract Loads"
+                    }
+                  },
+                  "Property": "# Rows Removed"
+                }
+              },
+              "queryRef": "Extract Loads.# Rows Removed",
+              "nativeQueryRef": "# Rows Removed"
+            }
+          ]
+        }
+      }
+    },
+    "objects": {
+      "values": [
+        {
+          "properties": {
+            "fontSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "16D"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "columnHeaders": [
+        {
+          "properties": {
+            "fontSize": {
+              "expr": {
+                "Literal": {
+                  "Value": "16D"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "c02058eadc643b547a19",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Extract Loads"
+              }
+            },
+            "Property": "Extract"
+          }
+        },
+        "type": "Categorical"
+      },
+      {
+        "name": "9e0ae45a220d777cf5cf",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Extract Loads"
+              }
+            },
+            "Property": "# Rows Loaded"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "63a1d2130fda8d1f0492",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Extract Loads"
+              }
+            },
+            "Property": "# Rows Quarantined"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "11c6c9aa0b5e7ebf9ad4",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Extract Loads"
+              }
+            },
+            "Property": "# Values Fixed"
+          }
+        },
+        "type": "Advanced"
+      },
+      {
+        "name": "20da81eba7b03e4ae8d6",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Extract Loads"
+              }
+            },
+            "Property": "# Rows Removed"
+          }
+        },
+        "type": "Advanced"
+      }
+    ]
+  }
+}

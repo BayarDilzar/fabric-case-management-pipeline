@@ -1,0 +1,122 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.15.0/schema.json",
+  "name": "4aebef0ed1aab42af5c8",
+  "position": {
+    "x": 1043.3350714932624,
+    "y": 366.11576145127208,
+    "z": 6,
+    "height": 430.61283859812829,
+    "width": 849.84384005269374,
+    "tabOrder": 6
+  },
+  "visual": {
+    "visualType": "clusteredBarChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Substance"
+                    }
+                  },
+                  "Property": "Substance"
+                }
+              },
+              "queryRef": "Substance.Substance",
+              "nativeQueryRef": "Substance",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Episodes"
+                    }
+                  },
+                  "Property": "# Referrals"
+                }
+              },
+              "queryRef": "Episodes.# Referrals",
+              "nativeQueryRef": "# Referrals"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "Episodes"
+                  }
+                },
+                "Property": "# Referrals"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    },
+    "objects": {
+      "labels": [
+        {
+          "properties": {
+            "show": {
+              "expr": {
+                "Literal": {
+                  "Value": "true"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "038c5736e7a7754e0d0c",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Substance"
+              }
+            },
+            "Property": "Substance"
+          }
+        },
+        "type": "Categorical"
+      },
+      {
+        "name": "5262e9eac45fcb09154c",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Episodes"
+              }
+            },
+            "Property": "# Referrals"
+          }
+        },
+        "type": "Advanced"
+      }
+    ]
+  }
+}

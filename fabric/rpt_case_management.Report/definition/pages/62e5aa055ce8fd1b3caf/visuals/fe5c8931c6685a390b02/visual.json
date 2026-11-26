@@ -1,0 +1,38 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.15.0/schema.json",
+  "name": "fe5c8931c6685a390b02",
+  "position": {
+    "x": 627.89801575321792,
+    "y": 24.660647144386203,
+    "z": 7,
+    "height": 274,
+    "width": 628,
+    "tabOrder": 7
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "textRuns": [
+                  {
+                    "value": "Service overview, synthetic data, reporting date 15 November 2026",
+                    "textStyle": {
+                      "fontWeight": "bold",
+                      "fontSize": "24pt"
+                    }
+                  }
+                ],
+                "horizontalTextAlignment": "center"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

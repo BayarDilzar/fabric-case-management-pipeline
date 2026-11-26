@@ -1,0 +1,56 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.15.0/schema.json",
+  "name": "51ce76a4b71efc4800b5",
+  "position": {
+    "x": 811.90438290748421,
+    "y": 128.99415429371246,
+    "z": 3,
+    "height": 286,
+    "width": 341,
+    "tabOrder": 3
+  },
+  "visual": {
+    "visualType": "cardVisual",
+    "query": {
+      "queryState": {
+        "Data": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Episodes"
+                    }
+                  },
+                  "Property": "Median Wait to Triage (days)"
+                }
+              },
+              "queryRef": "Episodes.Median Wait to Triage (days)",
+              "nativeQueryRef": "Median Wait to Triage (days)"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "f35f18f43a508f271c33",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Episodes"
+              }
+            },
+            "Property": "Median Wait to Triage (days)"
+          }
+        },
+        "type": "Advanced"
+      }
+    ]
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.15.0/schema.json",
+  "name": "d98e8ffa939b04314f80",
+  "position": {
+    "x": 0,
+    "y": 366.11576145127208,
+    "z": 1,
+    "height": 430.61283859812829,
+    "width": 707.570875758158,
+    "tabOrder": 1
+  },
+  "visual": {
+    "visualType": "clusteredBarChart",
+    "query": {
+      "queryState": {
+        "Category": {
+          "projections": [
+            {
+              "field": {
+                "Column": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Service"
+                    }
+                  },
+                  "Property": "Service"
+                }
+              },
+              "queryRef": "Service.Service",
+              "nativeQueryRef": "Service",
+              "active": true
+            }
+          ]
+        },
+        "Y": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Episodes"
+                    }
+                  },
+                  "Property": "# People in Treatment"
+                }
+              },
+              "queryRef": "Episodes.# People in Treatment",
+              "nativeQueryRef": "# People in Treatment"
+            }
+          ]
+        }
+      },
+      "sortDefinition": {
+        "sort": [
+          {
+            "field": {
+              "Measure": {
+                "Expression": {
+                  "SourceRef": {
+                    "Entity": "Episodes"
+                  }
+                },
+                "Property": "# People in Treatment"
+              }
+            },
+            "direction": "Descending"
+          }
+        ],
+        "isDefaultSort": true
+      }
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "51665e0dd53701558083",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Service"
+              }
+            },
+            "Property": "Service"
+          }
+        },
+        "type": "Categorical"
+      },
+      {
+        "name": "6f2b82ba4300d082c0bd",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Episodes"
+              }
+            },
+            "Property": "# People in Treatment"
+          }
+        },
+        "type": "Advanced"
+      }
+    ]
+  }
+}

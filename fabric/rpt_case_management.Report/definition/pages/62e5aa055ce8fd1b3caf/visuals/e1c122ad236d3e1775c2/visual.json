@@ -1,0 +1,56 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.15.0/schema.json",
+  "name": "e1c122ad236d3e1775c2",
+  "position": {
+    "x": 470.44926860059832,
+    "y": 128.99415429371246,
+    "z": 0,
+    "height": 309.20657573345778,
+    "width": 341.45511430688589,
+    "tabOrder": 0
+  },
+  "visual": {
+    "visualType": "cardVisual",
+    "query": {
+      "queryState": {
+        "Data": {
+          "projections": [
+            {
+              "field": {
+                "Measure": {
+                  "Expression": {
+                    "SourceRef": {
+                      "Entity": "Episodes"
+                    }
+                  },
+                  "Property": "# People in Treatment"
+                }
+              },
+              "queryRef": "Episodes.# People in Treatment",
+              "nativeQueryRef": "# People in Treatment"
+            }
+          ]
+        }
+      }
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "ffdc4b948103fe489585",
+        "field": {
+          "Measure": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "Episodes"
+              }
+            },
+            "Property": "# People in Treatment"
+          }
+        },
+        "type": "Advanced"
+      }
+    ]
+  }
+}
