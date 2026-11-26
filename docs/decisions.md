@@ -229,3 +229,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** Each public Bronze column is named from its header: any `[note n]` removed, lower case, and each run of other characters turned into one underscore. The run stops if two headers give the same name. The exact headers are listed in docs/public-data.md.
 - **Alternatives:** Delta column mapping, which keeps the headers as they are. Names typed in by hand.
 - **Reason:** The headers hold spaces, commas, brackets and line breaks, which a Delta column name cannot hold without column mapping. With column mapping every query would have to quote names with line breaks in them. A fixed rule gives the same names on every run and needs no change when ONS adds a period.
+
+## Suppressed rates stored as null with the ONS marker
+
+- **Decision:** Where ONS gives `[x]` instead of a rate, Silver stores null for the rate and both confidence limits, and rate_marker holds `[x]`. A rate marked `[u]` is kept, with rate_marker `[u]`. A deaths count or rate that cannot be read, or any other marker, stops the run.
+- **Alternatives:** 0 for a suppressed rate. Two true or false flag columns.
+- **Reason:** 0 would read as no deaths, when Rutland, for one, had 8. The marker is ONS's own shorthand, so a reader can look it up in the ONS notes, and one column covers both cases. In the 2023 to 2025 figures 7 districts have `[x]` and 48 have `[u]`.
