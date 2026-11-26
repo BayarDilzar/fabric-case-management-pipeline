@@ -220,7 +220,7 @@ Each entry records the decision, the alternatives considered and the reason.
 
 ## Landing checked against the file already landed
 
-- **Decision:** Each public source has a release folder in Landing. nb_land_public_data downloads every file and compares its sha256 with the file already landed for that release. Any difference stops the run before anything is written. A file is written only into a release folder that is still empty.
+- **Decision:** Each public source has a release folder in Landing. nb_land_public_data downloads every file and compares its sha256 with the file already landed for that release. Any difference stops the run before anything is written. A file is written only when nothing is landed at its path yet.
 - **Alternatives:** A sha256 for each release written into the notebook. Overwriting the landed file on every run.
 - **Reason:** The landed file is its own record, so there is no second copy of the sha256 to keep in step. Overwriting would let the ONS "current" link replace the 2025 edition without anyone noticing. Tested in a Livy session with the deprivation release pointed at a different file: the run stopped and named both sha256 values, and the landed file kept its sha256 and its modified time.
 
