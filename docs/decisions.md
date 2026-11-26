@@ -193,3 +193,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** Two notebooks load the public data: nb_land_public_data downloads the files and nb_load_public_data loads them to Bronze, Silver and Gold. Dataflow Gen2 is not used for now. A Dataflow could be added by hand later.
 - **Alternatives:** A Dataflow Gen2 for the lookup and the deprivation file, as first planned, with a notebook for the ONS file.
 - **Reason:** One tool then handles all three files, and the notebooks are created, run and checked through the Fabric API like every other step in this project. The ONS workbook needs code in any case: the latest period is found from its headers, and its markers are checked. The downloads worked from inside Fabric for all three sources, so no file was landed from this machine.
+
+## A separate manual pipeline for public data
+
+- **Decision:** pl_load_public_data runs nb_land_public_data and then nb_load_public_data, each with a Fail activity on failure. It has no parameters and no schedule, and runs one at a time.
+- **Alternatives:** Adding the two steps to pl_load_extract. A yearly schedule.
+- **Reason:** The public data changes once a year; the extracts arrive every week. Inside pl_load_extract the files would be downloaded every week for nothing, and a publisher's site being down would fail the treatment load. A yearly schedule would need an end date and a running capacity on the day. Runs are not written to ops.run_log, because that table describes extract loads and the resolver reads it. The load notebook's exit value, kept in the pipeline run history, holds each run's row counts.
