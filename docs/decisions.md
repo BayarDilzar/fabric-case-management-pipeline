@@ -211,3 +211,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** The deaths figures come from Table 3 of the ONS workbook: all drug poisoning, persons, for the latest three year period, 2023 to 2025.
 - **Alternatives:** Table 6, the headline drug misuse measure, which the earlier M5 plan named. Both tables.
 - **Reason:** The M5 design names the source, the Silver table and the Gold fields as drug poisoning deaths, and Table 3 is that measure. ONS note 2 says "misuse is a subset", so the two cannot be added, and loading both would double the columns for one comparison. Table 6 has the same layout as Table 3, so changing to it means changing only the sheet name in nb_load_public_data.
+
+## District codes are not remapped
+
+- **Decision:** Every table keeps the district codes its publisher gives. dim_local_authority has one row per district in the December 2024 lookup, which matches IoD 2025 code for code. The ONS file gives Barnsley and Sheffield their 2025 codes, E08000038 and E08000039, so in Gold those two districts have no drug poisoning figures.
+- **Alternatives:** A two-row mapping from the 2025 codes to E08000016 and E08000019, as the earlier M5 plan proposed. The April 2025 lookup, which would move the gap to the deprivation figures instead.
+- **Reason:** A mapping would assume each area is the same under both codes, and I found no ONS statement of why the codes changed. Empty figures show the gap, where a mapping would hide it. None of the six service districts is affected. nb_load_public_data stops the run if the IoD codes and the lookup codes ever differ, and its exit value lists every district without drug poisoning figures.
