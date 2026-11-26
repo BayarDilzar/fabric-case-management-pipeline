@@ -28,3 +28,14 @@ I read each source's page and recorded its licence on 26 November 2026, before d
 - **Licence:** Open Government Licence v3.0. The page footer says "All content is available under the Open Government Licence v3.0, except where otherwise stated". The ONS terms and conditions say "Most content on this website is subject to Crown copyright protection and is published under the Open Government Licence (OGL)"; the exemptions they list are third-party photographs, illustrations and videos.
 - **Attribution:** the page gives no wording of its own. The ONS licences page says "If you are reproducing ONS content you must include a source accreditation to ONS", so I use "Source: Office for National Statistics licensed under the Open Government Licence v3.0."
 - **Note:** the file link points at "current", so it will serve a different file after the next release. The sha256 of the landed file is recorded under Lineage.
+
+### Local authorities: ONS Open Geography Portal lookup
+
+- **Publisher:** Office for National Statistics (ONS), Open Geography Portal.
+- **Title:** Local Authority District to Region (December 2024) Lookup in EN.
+- **Edition:** December 2024, districts and regions in England as at 31 December 2024. Fields LAD24CD, LAD24NM, RGN24CD and RGN24NM. IoD 2025 codes its districts at 2024 boundaries, so this is the edition that matches it.
+- **Release date:** 28 November 2024, the date the portal gives for the item's creation and its last data edit.
+- **Page:** https://geoportal.statistics.gov.uk/datasets/3959874c514b470e9dd160acdc00c97a/about
+- **File:** https://geoportal.statistics.gov.uk/api/download/v1/items/3959874c514b470e9dd160acdc00c97a/csv?layers=0
+- **Licence:** Open Government Licence v3.0. The item's licence field links to https://www.ons.gov.uk/methodology/geography/licences, which says "Lookup products are supplied under the Open Government Licence."
+- **Attribution:** the same page says "You must use the following copyright statement when you reproduce or use this material: Source: Office for National Statistics licensed under the Open Government Licence v.3.0".
