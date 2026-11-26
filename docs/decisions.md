@@ -217,3 +217,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** Every table keeps the district codes its publisher gives. dim_local_authority has one row per district in the December 2024 lookup, which matches IoD 2025 code for code. The ONS file gives Barnsley and Sheffield their 2025 codes, E08000038 and E08000039, so in Gold those two districts have no drug poisoning figures.
 - **Alternatives:** A two-row mapping from the 2025 codes to E08000016 and E08000019, as the earlier M5 plan proposed. The April 2025 lookup, which would move the gap to the deprivation figures instead.
 - **Reason:** A mapping would assume each area is the same under both codes, and I found no ONS statement of why the codes changed. Empty figures show the gap, where a mapping would hide it. None of the six service districts is affected. nb_load_public_data stops the run if the IoD codes and the lookup codes ever differ, and its exit value lists every district without drug poisoning figures.
+
+## Landing checked against the file already landed
+
+- **Decision:** Each public source has a release folder in Landing. nb_land_public_data downloads every file and compares its sha256 with the file already landed for that release. Any difference stops the run before anything is written. A file is written only into a release folder that is still empty.
+- **Alternatives:** A sha256 for each release written into the notebook. Overwriting the landed file on every run.
+- **Reason:** The landed file is its own record, so there is no second copy of the sha256 to keep in step. Overwriting would let the ONS "current" link replace the 2025 edition without anyone noticing. Tested in a Livy session with the deprivation release pointed at a different file: the run stopped and named both sha256 values, and the landed file kept its sha256 and its modified time.
