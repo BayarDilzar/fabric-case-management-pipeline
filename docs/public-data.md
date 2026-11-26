@@ -82,3 +82,11 @@ A Bronze column name is the header with any `[note n]` removed, in lower case, w
 | lh_silver.reference.deprivation_lad | 296 |
 | lh_silver.reference.drug_poisoning_deaths_lad | 296 |
 | lh_gold.dbo.dim_local_authority | 296 |
+
+## How to rerun
+
+Run pl_load_public_data by hand. It has no parameters and no schedule. The steps and checks are in docs/runbook.md.
+
+- A rerun downloads each file again and compares it with the file landed for that release. If they are the same, Landing is left alone, and Bronze, Silver and Gold are rebuilt with the same row counts. Two runs on 26 November 2026 gave the same counts in all seven tables.
+- If a publisher now serves a different file, the run stops at Land public data with both sha256 values, and nothing is written. This is expected for the ONS file after its next release, because its link points at "current".
+- To load a new edition, check its licence and record it above first. Then add its release to SOURCES in nb_land_public_data, with a new release folder, URL and file name, and run the pipeline. The old release stays in Landing.
