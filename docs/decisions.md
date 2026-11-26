@@ -199,3 +199,9 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** pl_load_public_data runs nb_land_public_data and then nb_load_public_data, each with a Fail activity on failure. It has no parameters and no schedule, and runs one at a time.
 - **Alternatives:** Adding the two steps to pl_load_extract. A yearly schedule.
 - **Reason:** The public data changes once a year; the extracts arrive every week. Inside pl_load_extract the files would be downloaded every week for nothing, and a publisher's site being down would fail the treatment load. A yearly schedule would need an end date and a running capacity on the day. Runs are not written to ops.run_log, because that table describes extract loads and the resolver reads it. The load notebook's exit value, kept in the pipeline run history, holds each run's row counts.
+
+## Public data in reference schemas
+
+- **Decision:** The Bronze and Silver public tables sit in a reference schema in lh_bronze and lh_silver. The one Gold table, dim_local_authority, sits in lh_gold.dbo next to dim_service.
+- **Alternatives:** The dbo schema in every lakehouse. A separate lakehouse for public data.
+- **Reason:** The demo tables in dbo, dq and ops stay untouched, and the schema shows which tables hold public reference data rather than extracts. Gold keeps all its tables in dbo, so the new dimension sits with the star it joins. Before creating it I read the live nb_load_gold: it rebuilds only its nine named tables with CREATE OR REPLACE and drops nothing, so its full rebuild leaves dim_local_authority alone.
