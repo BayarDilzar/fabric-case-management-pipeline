@@ -31,27 +31,37 @@ flowchart LR
     model --> report["Power BI report"]
 ```
 
-### Generator
+## How I built it
 
-The generator in `extract_generator/` runs on my laptop. From one seed it builds about three and a half years of clients, episodes, interventions and reviews for six fictional services in six real English districts. It writes one historical extract, three weekly extracts that hold only new and changed rows, and one broken extract whose interventions file has no `end_date` column. It also plants known mistakes in the files and lists every one in a manifest, 312 in the historical extract, so the checks in Fabric can be tested against an answer key. The same seed always gives the same files, byte for byte.
+I built it in stages, and the docs call them M1 to M5. M1 is the generator and Bronze, M2 is Silver, M3 is the weekly loads and the pipeline around them, M4 is Gold and the report, and M5 is the public data.
 
-### Landing
+### The data
 
-The generator's output goes into `Files/landing/` in lh_bronze, one folder per extract date, with its manifest next to it.
+None of the treatment data is real. I designed a Python generator, in `extract_generator/`, that plays the part of the provider's case management system. From one seed it builds about three and a half years of clients, episodes of care, interventions and reviews for six fictional services in six real English districts. It exports them as CSV files: one large historical extract, three weekly extracts holding only new and changed rows, and one broken extract with a column missing. On the way out it plants the kind of errors real exports have, such as duplicate rows, dates written day first, codes in the wrong case and rows that point at a client who does not exist. Every planted error goes into a manifest with the outcome the pipeline should reach, so the manifest is an answer key that the pipeline in Fabric is marked against.
 
-### Bronze
+### Landing and Bronze
 
-nb_load_bronze loads one extract into Delta tables in lh_bronze. Every column stays text, and three load columns record the extract, the source file and the load time. Text means bad values survive for the Silver checks, and Bronze row counts match the files exactly. Before it writes anything, it checks the columns of every file, so the broken extract stops here. A rerun replaces only that extract's rows.
+Fabric keeps data in lakehouses, which hold plain files next to Delta tables (tables stored as Parquet files with a transaction log, so a write either lands in full or not at all). The generator's files are uploaded to a landing folder in lh_bronze, one folder per extract date, and nb_load_bronze loads one extract at a time into Bronze, the raw layer. Bronze keeps each extract exactly as it arrives, so nothing is lost. Every column is stored as text, with three extra columns for the extract, the source file and the load time. Text is a deliberate choice: if Bronze turned dates into dates on the way in, a date written day first would fail or come out empty, and the error would vanish before Silver could see it. Loading the same extract again replaces only that extract's rows.
 
-### Silver
+![Bronze clients table in Fabric with every source column typed as text and three load columns](docs/images/01-bronze-tables-loaded-as-text.png)
 
-nb_load_silver checks each row of an extract against 48 rules, and every row ends up with one of three outcomes:
+Bronze clients: every source column is text, and the last three columns record the extract, the file and the load time.
 
-- Fixed: the value has one right answer, so Silver corrects it. Spaces are trimmed, codes are upper-cased, and dates written as DD/MM/YYYY or YYYYMMDD are read as dates.
-- Removed: another row has the same business key. Silver keeps the one with the latest `last_modified_at`.
-- Quarantined: anything else, such as an unknown code, a missing parent or a broken business rule. The row goes to `dq.quarantine` with its rule ids, a reason and the original Bronze row as JSON. Its child rows are quarantined with it.
+### Silver: cleaning and checking
 
-Clean rows are merged into Silver on the business key, and a stored row only changes when the incoming `last_modified_at` is newer. So a rerun, or an older extract that arrives late, changes nothing. Each run also writes `dq.reconciliation`, where Bronze rows must equal inserted + updated + unchanged + removed + quarantined for every table, and the run fails if one does not balance.
+Silver is the cleaned layer, where nb_load_silver checks every row against 48 rules. Silver cleans it: it removes duplicates, fixes what it safely can, and quarantines bad rows with a reason instead of deleting them. A fix is only allowed when there is one right answer, like a code typed in lower case. HEROIN in a substance column probably means the code OPIATE, but no value in Silver is a guess, so that row goes to quarantine with the rule it broke and a copy of the original row. Clean rows go into Silver with a MERGE, which inserts new records and updates existing ones by their key. A stored row only changes when the incoming copy is newer, so a rerun or a late, older extract cannot overwrite it. Then every load is reconciled, so every row is accounted for: for each table, the rows in Bronze must equal the rows inserted, updated, unchanged, removed and quarantined, or the run fails.
+
+![Silver clients table with typed columns, and the dq schema holding quarantine, reconciliation and rule_results](docs/images/05-silver-typed-tables-and-dq-schema.png)
+
+Silver clients: birth_year is now a number, and the data quality tables live in their own dq schema.
+
+![Quarantine table listing rejected rows with rule ids, reasons and the original row](docs/images/06-dq-quarantine-with-reasons.png)
+
+dq.quarantine: 122 rejected rows across four extracts, each with its rule, a plain English reason and the original Bronze row.
+
+![Reconciliation table with inserted, updated and unchanged counts per extract](docs/images/07-dq-reconciliation-by-extract.png)
+
+dq.reconciliation: the lower boxed rows are a rerun of 2026-11-08, which inserts and updates nothing.
 
 ### Gold
 
@@ -94,10 +104,6 @@ All six as of 15 November 2026. How each one is measured is in [docs/decisions.m
 
 ## Screenshots
 
-![Bronze clients table in Fabric with every source column typed as text and three load columns](docs/images/01-bronze-tables-loaded-as-text.png)
-
-Bronze keeps each extract exactly as it arrived. Every source column is text, so bad values survive for the Silver checks, and three load columns record the extract, the source file and the load time.
-
 ![Fabric pipeline canvas for pl_load_extract: set run id, resolve extract, an If Condition that runs the load steps, and a failure branch that logs then fails](docs/images/02-orchestration-pipeline.png)
 
 pl_load_extract picks the oldest extract not yet loaded, then runs Bronze, Silver and Gold in order. When a step fails, the pipeline logs the failure, then a Fail activity marks the run as Failed (boxed).
@@ -109,18 +115,6 @@ Runs of pl_load_extract on the morning of 25 November 2026. The two failures are
 ![Error message naming the extract, file and missing column](docs/images/04-broken-extract-fails-schema-check.png)
 
 The broken extract fails the schema check before anything is written: interventions.csv is missing end_date. This run is from before Load Gold was added to the pipeline.
-
-![Silver clients table with typed columns, and the dq schema holding quarantine, reconciliation and rule_results](docs/images/05-silver-typed-tables-and-dq-schema.png)
-
-Silver is typed: birth_year is a number and last_modified_at a timestamp. The data quality tables sit in their own dq schema.
-
-![Quarantine table listing rejected rows with rule ids, reasons and the original row](docs/images/06-dq-quarantine-with-reasons.png)
-
-122 rejected rows across four extracts, each kept with the rule it broke, a plain English reason and the original Bronze row.
-
-![Reconciliation table with inserted, updated and unchanged counts per extract](docs/images/07-dq-reconciliation-by-extract.png)
-
-Every extract reconciles: Bronze rows = inserted + updated + unchanged + duplicates removed + quarantined. The boxed rows are 2026-11-08 loaded once, then rerun. The rerun inserts and updates nothing.
 
 ![Run log table listing twelve runs with their status and failed step](docs/images/08-run-log.png)
 
