@@ -38,7 +38,7 @@ nb_load_bronze loads one extract into Delta tables in lh_bronze. Every column st
 
 ### Silver
 
-nb_load_silver checks each row of an extract against 44 rules, and every row ends up with one of three outcomes:
+nb_load_silver checks each row of an extract against 48 rules, and every row ends up with one of three outcomes:
 
 - Fixed: the value has one right answer, so Silver corrects it. Spaces are trimmed, codes are upper-cased, and dates written as DD/MM/YYYY or YYYYMMDD are read as dates.
 - Removed: another row has the same business key. Silver keeps the one with the latest `last_modified_at`.
