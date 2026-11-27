@@ -199,3 +199,57 @@ What is where:
 7. Pause the capacity.
 
 The [runbook](docs/runbook.md) has the checks after each run, how to rerun one extract and how to recover from a failed run.
+
+## Data and licences
+
+The treatment data is synthetic. No row describes a real person, and the six services are fictional, although their districts are real: Middlesbrough, Blackpool, Brighton and Hove, Cornwall, Leeds and Lewisham. I designed the fields and code lists myself, and used the public NDTMS Core Dataset documents as a guide to concepts only. The data model, from the extracts to the Gold star, is my own design, not any provider's or a national dataset's.
+
+The public data strand loads three files, all under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/):
+
+| Source | Publisher | Edition |
+|---|---|---|
+| English indices of deprivation 2025, File 10: Local Authority District summaries, lower tier | Ministry of Housing, Communities and Local Government | Version 2, 17 November 2025 |
+| Deaths related to drug poisoning by local authority, England and Wales | Office for National Statistics | Deaths registered up to 2025, released 4 November 2026 |
+| Local Authority District to Region (December 2024) Lookup in EN | Office for National Statistics, Open Geography Portal | December 2024 |
+
+Contains public sector information licensed under the Open Government Licence v3.0. Source: Office for National Statistics licensed under the Open Government Licence v.3.0.
+
+Page and file links, the exact columns used, and the sha256 of each landed file are in [docs/public-data.md](docs/public-data.md).
+
+The code is under the MIT licence. See [LICENSE](LICENSE).
+
+## Known limitations
+
+- The data is synthetic and its shares are made up to look plausible. No figure here is a finding about a real provider.
+- I upload the extracts by hand. A real source system would drop them into Landing itself.
+- A run of pl_load_extract takes 9 to 10 minutes on F2, mostly because each notebook step starts its own Spark session.
+- The schedule is switched off, so every run so far was started by hand. Fabric is reported to log scheduled runs with the trigger type Manual too, and I could not test that.
+- A run that fails halfway leaves some tables updated until the next run, which repeats the extract safely. If the capacity stops mid-run, no run log row is written, but the resolver still repeats the extract.
+- A child row whose parent was quarantined in an earlier extract is quarantined as an orphan, not as "parent quarantined". The test data never does this.
+- Values fixed counts rows per fix rule, not values, so a row with two codes fixed by the same rule counts once. The test data has one defect per row, so the figures here are exact.
+- The weekly files cannot show a deleted record.
+- The public data strand (M5) is built but not reviewed by me. Barnsley and Sheffield have no drug poisoning figures in Gold, because the ONS file uses their 2025 district codes and I did not remap them. Its other limits are in [docs/public-data.md](docs/public-data.md#limits).
+
+The report has open flaws, which I can see in its definition in `fabric/` and in the screenshots above:
+
+- Planned Completion (%) has no service on its axis, so it shows one bar for all services (48.2%), not the share for each service.
+- The wait to triage is only on two cards for all services together. The median and share for each service are in Gold and in the views, but not on the page.
+- Referrals per month is one line with no split by referral source. Its last point, November 2026, covers only up to the 15th, and the chart does not say so.
+- The visual titles are the default field names, such as "# People in Treatment by Service", not plain titles.
+- The Last Successful Load card shows 25 Nov 2026 06:40 without a time zone. The time is UTC.
+
+## What I would do next
+
+- Fix the report flaws above.
+- Review the public data strand, then add dim_local_authority to the semantic model so each service sits next to its district's figures.
+- Promote the items to a test workspace with a deployment pipeline and run the load there. I planned this as a sixth stage and did not build it.
+- Write a run log row for public data runs as well. For now their row counts are only in the pipeline run history.
+
+## Docs
+
+- [Decisions log](docs/decisions.md): every design choice, the alternatives and the reason.
+- [Source to target](docs/source-to-target.md): each column from Bronze to Silver to Gold.
+- [Runbook](docs/runbook.md): loading, rerunning and recovering.
+- [Public data](docs/public-data.md): sources, licences, lineage and limits.
+
+Author: Bayar Dilzar
