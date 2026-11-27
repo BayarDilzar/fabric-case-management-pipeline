@@ -50,7 +50,7 @@
 
 ## Load the public data
 
-pl_load_public_data lands the three public files and loads them to Bronze, Silver and Gold. The files change once a year, so it runs by hand only. docs/public-data.md describes the sources.
+pl_load_public_data lands the three public files and loads them to Bronze, Silver and Gold. The files change once a year, so it runs by hand only. [public-data.md](public-data.md) describes the sources.
 
 1. Resume the capacity if it is paused.
 2. Open pl_load_public_data and select Run. It has no parameters.
@@ -63,7 +63,7 @@ pl_load_public_data lands the three public files and loads them to Bronze, Silve
 ## Recover from a failed public data run
 
 1. Open the failed run in Monitor and read the error of the failed activity.
-2. If Land public data failed with "is landed with sha256", the publisher now serves a different file for that release. Nothing was written. Follow How to rerun in docs/public-data.md before loading the new file.
+2. If Land public data failed with "is landed with sha256", the publisher now serves a different file for that release. Nothing was written. Follow [How to rerun](public-data.md#how-to-rerun) in public-data.md before loading the new file.
 3. If Land public data failed with "did not return an Excel file" or a network error, the site was down or sent an error page. Run the pipeline again later.
 4. If Load public data failed, the message names the file or table and the check. "should hold the headers" means the publisher changed the layout. "has no row for service district codes" means a source no longer covers a service district; do not remap the code, look at the source first.
 5. Bronze is replaced before the Silver checks run. Silver and Gold are written only after their own checks pass, so after a failed Silver check both keep the tables from the last good run.

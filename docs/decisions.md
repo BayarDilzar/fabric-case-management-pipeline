@@ -226,7 +226,7 @@ Each entry records the decision, the alternatives considered and the reason.
 
 ## Bronze column names made from the headers
 
-- **Decision:** Each public Bronze column is named from its header: any `[note n]` removed, lower case, and each run of other characters turned into one underscore. The run stops if two headers give the same name. The exact headers are listed in docs/public-data.md.
+- **Decision:** Each public Bronze column is named from its header: any `[note n]` removed, lower case, and each run of other characters turned into one underscore. The run stops if two headers give the same name. The exact headers are listed in [public-data.md](public-data.md#columns-used).
 - **Alternatives:** Delta column mapping, which keeps the headers as they are. Names typed in by hand.
 - **Reason:** The headers hold spaces, commas, brackets and line breaks, which a Delta column name cannot hold without column mapping. With column mapping every query would have to quote names with line breaks in them. A fixed rule gives the same names on every run and needs no change when ONS adds a period.
 

@@ -89,7 +89,7 @@ Silver is lh_silver.dbo, with dq and ops in lh_silver. Gold is lh_gold.dbo. nb_l
 
 ## Public data: Landing to Bronze
 
-nb_load_public_data reads each landed file in lh_bronze Files/public and replaces its table in lh_bronze.reference. Every column of the source sheet is kept as text, named from its header as described in docs/decisions.md. The exact headers are listed in docs/public-data.md. An empty cell is stored as null. Each table also gets these columns.
+nb_load_public_data reads each landed file in lh_bronze Files/public and replaces its table in lh_bronze.reference. Every column of the source sheet is kept as text, named from its header as described in [decisions.md](decisions.md#bronze-column-names-made-from-the-headers). The exact headers are listed in [public-data.md](public-data.md#columns-used). An empty cell is stored as null. Each table also gets these columns.
 
 | Source | Bronze column | Target type | Transformation |
 |---|---|---|---|
