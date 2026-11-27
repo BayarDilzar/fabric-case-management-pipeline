@@ -1,6 +1,8 @@
 # Treatment case management pipeline in Microsoft Fabric
 
-This is a Microsoft Fabric pipeline for a fictional drug and alcohol treatment provider. Each week it takes the export from the provider's case management system, checks it row by row and feeds a Power BI report. The data is synthetic with errors planted on purpose, and the project proves every one is caught and no row goes missing.
+This is a Microsoft Fabric pipeline for a fictional drug and alcohol treatment provider. Each week it takes the export from the provider's case management system, checks it row by row and feeds a Power BI report. The data is synthetic with errors planted on purpose, and the project shows every one is caught and no row goes missing.
+
+Built with: Fabric lakehouses (Delta tables), Spark SQL notebooks, PySpark, Data Factory pipelines, a Direct Lake semantic model, Power BI, Python and pytest.
 
 ![Power BI service overview page](docs/images/10-report-service-overview.png)
 
@@ -50,7 +52,7 @@ dq.reconciliation: the lower boxed rows are a rerun of 2026-11-08, which inserts
 
 ### Gold and the model
 
-nb_load_gold rebuilds Gold from Silver in full on every run. The reporting date is the latest extract's cut-off, not today. The semantic model reads Gold in Direct Lake mode, so there's no import to refresh.
+nb_load_gold rebuilds Gold, a small star schema, from Silver in full on every run. The reporting date is the latest extract's cut-off, not today. The semantic model reads Gold in Direct Lake mode, so there's no import to refresh.
 
 ![Semantic model diagram with the Episodes fact table joined to six dimension tables, plus two standalone tables](docs/images/09-gold-semantic-model.png)
 
@@ -58,7 +60,7 @@ The semantic model: Episodes in the middle with its six dimensions, and two stan
 
 ### The report
 
-Two pages. Service overview covers people in treatment, waits to triage, planned completions and referrals. Anyone reading the first page can check it against the second.
+Two pages. Service overview covers people in treatment, waits to triage, planned completions and referrals. Data quality shows what was loaded, fixed, removed and quarantined for each extract. Anyone reading the first page can check it against the second.
 
 ![Power BI data quality page with a table per extract, a chart of quarantined rows and the last successful load time](docs/images/11-report-data-quality.png)
 
@@ -80,7 +82,7 @@ Runs on the morning of 25 November 2026. Both failures are the broken extract 20
 
 The broken extract stops at the column check: interventions.csv has no end_date, so nothing was written. This run predates the Load Gold step.
 
-The [full build story](docs/how-it-works.md) adds the design decisions.
+A second pipeline, pl_load_public_data, loads three public datasets into a local authority table in Gold. More detail and the design decisions are in the [build story](docs/how-it-works.md).
 
 ## Proving it with SQL
 
