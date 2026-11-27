@@ -162,3 +162,40 @@ I checked the pipeline from the tables themselves with five Spark SQL queries in
 ![Notebook cell with a Spark SQL join returning people in treatment for six services](docs/images/17-sql-gold-join-matches-report.png)
 
 The tests in `tests/` check the generator: the same seed gives the same bytes, and the manifest lists exactly the defects that a separate detector finds in the files, for five seeds. A test also checks that each file in `sql/reporting/` creates the view it is named after.
+
+## How to run it
+
+What is where:
+
+| Folder | What it holds |
+|---|---|
+| `extract_generator/` | The Python generator that writes the synthetic extracts |
+| `tests/` | Tests for the generator and the view files |
+| `fabric/` | The Fabric items, as Fabric Git integration writes them: lakehouses, notebooks, pipelines, the semantic model and the report |
+| `sql/` | The reporting views and the script that deploys them |
+| `docs/` | Decisions, mappings, the runbook and the public data sources |
+
+1. Make the extracts on your own machine. I used Python 3.10.
+
+   ```
+   py -3 -m venv .venv
+   .venv\Scripts\python -m pip install -r requirements-dev.txt
+   .venv\Scripts\python -m extract_generator --seed 2026 --out output
+   .venv\Scripts\python -m pytest
+   ```
+
+   The generator takes about two seconds and writes to `output/`, which git ignores.
+
+2. Create a Fabric workspace on a capacity. I used an F2 capacity, paid as you go, and paused it whenever I stopped. Connect the workspace to this repo with Fabric Git integration, using the `fabric/` folder, and update the workspace from Git. A tenant admin has to turn on the setting that lets users sync workspace items with GitHub. I have only run this in my own workspace. Each notebook stores its default lakehouse as an ID in `fabric/`, so in a new workspace you may need to attach each notebook to its lakehouse again.
+
+3. Upload the contents of `output/` to `Files/landing/` in lh_bronze, keeping the folder names (`reference/`, `extracts/<date>/` and `manifests/<date>/`). I used the OneLake API from a small script that is not in this repo. Any upload that keeps the paths works.
+
+4. Run pl_load_extract with `extract_id` left empty. Each run loads the next extract, so four runs load the historical extract and the three weekly ones. A fifth run reaches the broken extract 2026-11-22 and fails, which is what it should do. A run takes 9 to 10 minutes on F2.
+
+5. Deploy the reporting views with `python sql/deploy_views.py <workspace name>`, after `az login`.
+
+6. Run pl_load_public_data to load the public data. It has no parameters.
+
+7. Pause the capacity.
+
+The [runbook](docs/runbook.md) has the checks after each run, how to rerun one extract and how to recover from a failed run.
