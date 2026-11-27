@@ -99,27 +99,38 @@ The broken extract stops at the column check: interventions.csv has no end_date,
 
 ops.run_log, one row per run. Nothing to load is a run with no new extract waiting.
 
-### Public data
+### Proving it with SQL
 
-pl_load_public_data downloads three official files: the English Indices of Deprivation 2025, ONS deaths related to drug poisoning by local authority, and the ONS district to region lookup. It loads them through Bronze and Silver into `reference` schemas and builds `lh_gold.dbo.dim_local_authority`, one row per English district, which joins to `dim_service` on the district code. It is not in the semantic model or the report yet. The public data strand (M5) is built but not reviewed by me.
-
-Every design choice, with the alternatives and the reason, is in [docs/decisions.md](docs/decisions.md). Column by column mappings are in [docs/source-to-target.md](docs/source-to-target.md).
-
-## SQL checks
-
-I checked the pipeline from the tables themselves with five Spark SQL queries in the nb_sql_checks notebook. Each one proves something different.
-
-1. [Duplicates in Bronze](docs/images/13-sql-duplicates-in-bronze.png). 20 client ids arrive twice in the historical extract, which matches the 20 duplicates Silver removed from clients. So Bronze keeps what arrived, and the removing happens in Silver.
-2. Every load reconciles (below). For each of the seven runs, Bronze rows equal inserted + updated + unchanged + duplicates removed + quarantined, reruns included. So no row was lost or counted twice. These totals include the services and code list files, so each is 31 rows higher than Rows loaded above.
-3. [Quarantine by rule](docs/images/15-sql-quarantine-by-rule.png). The 122 quarantined rows fall into 12 groups of rule ids, so every held-back row says which rule it broke. One row can break more than one rule.
-4. [Run history by status](docs/images/16-sql-run-history-by-status.png). 2026-11-22 failed on all four attempts, 2026-11-08 succeeded twice and 2026-11-15 three times. So a broken extract is retried, not skipped, and a rerun succeeds.
-5. Gold matches the report (below). People in treatment by service from a join of fact_episode and dim_service gives 154, 115, 90, 87, 73 and 63, the same as the report.
+Passing runs are not proof on their own, so I also checked the results straight from the tables. The nb_sql_checks notebook holds five Spark SQL queries over Bronze, Silver and Gold. The two below matter most: every run's reconciliation balances, reruns included, and people in treatment rebuilt from Gold match the report service by service.
 
 ![Notebook cell with a Spark SQL query showing balances for every pipeline run](docs/images/14-sql-every-load-reconciles.png)
 
+Every run balances. These totals include the two reference files, so each is 31 rows above Rows Loaded on the report.
+
 ![Notebook cell with a Spark SQL join returning people in treatment for six services](docs/images/17-sql-gold-join-matches-report.png)
 
-The tests in `tests/` check the generator: the same seed gives the same bytes, and the manifest lists exactly the defects that a separate detector finds in the files, for five seeds. A test also checks that each file in `sql/reporting/` creates the view it is named after.
+People in treatment by service from a join over Gold: the same six numbers as the report.
+
+<details>
+<summary>More SQL checks</summary>
+
+![Notebook cell with a Spark SQL GROUP BY and HAVING query returning 20 duplicated client IDs](docs/images/13-sql-duplicates-in-bronze.png)
+
+20 client ids arrive twice in the historical extract, matching the 20 duplicates Silver removed from clients.
+
+![Notebook cell with a Spark SQL query counting quarantined rows per rule](docs/images/15-sql-quarantine-by-rule.png)
+
+The 122 quarantined rows grouped by the rules they broke. One row can break more than one rule.
+
+![Notebook cell with a Spark SQL query counting pipeline runs by extract and status](docs/images/16-sql-run-history-by-status.png)
+
+Runs by extract and status: the broken extract failed all four times, and the reruns of 2026-11-08 and 2026-11-15 succeeded.
+
+</details>
+
+### Public data
+
+The last stage, pl_load_public_data, adds real context. It downloads three official datasets: the English Indices of Deprivation 2025, ONS figures for deaths related to drug poisoning by local authority, and the ONS lookup of districts and regions. They go through the same layers and end up in one Gold table, dim_local_authority, with a row for every English district. It joins to the services on the district code, so each fictional service can sit next to real figures for the area it serves. I recorded each source's licence before downloading anything, and each landed file keeps its sha256 fingerprint, so if a publisher swaps the file the next load stops instead of quietly taking it. The table is not in the semantic model or the report yet. The public data strand (M5) is built but not reviewed by me.
 
 ## How to run it
 
