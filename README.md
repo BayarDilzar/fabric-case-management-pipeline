@@ -63,70 +63,47 @@ dq.quarantine: 122 rejected rows across four extracts, each with its rule, a pla
 
 dq.reconciliation: the lower boxed rows are a rerun of 2026-11-08, which inserts and updates nothing.
 
-### Gold
+### Gold and the semantic model
 
-nb_load_gold rebuilds lh_gold from Silver on every run, in about a minute. It is a small star schema: `fact_episode` has one row per episode, with dimensions for client, service, date, referral source, substance and discharge reason. `fact_extract_load` holds the data quality figures for each extract, and `report_settings` holds the reporting date and the 21 day wait threshold. The reporting date is the cut-off of the latest loaded extract, never today, so the same data always gives the same answers. Six T-SQL views in `sql/reporting/` answer the same questions for analysts on the lh_gold SQL endpoint.
+Gold, the reporting layer, is rebuilt in full from Silver on every run. It is a star schema: one central fact table with a row per episode of care, and small dimension tables around it for client, service, date, referral source, substance and discharge reason. Every question the report asks is a count of episodes filtered by one of those, which is the shape a star handles best. Gold is small, 2,683 episodes and 2,090 clients after four extracts, and a rebuild took 28 to 73 seconds in test runs, so it costs little and Gold can never drift out of step with Silver. The reporting date is the cut-off of the latest extract, never today, so the same data always gives the same answers. On top sits the semantic model, the tables, relationships and measures that Power BI reads, in Direct Lake mode, which reads the Gold Delta tables where they are instead of keeping an imported copy that needs refreshing.
 
-### Semantic model and report
+![Semantic model diagram with the Episodes fact table joined to six dimension tables, plus two standalone tables](docs/images/09-gold-semantic-model.png)
 
-sm_case_management reads the Gold tables in Direct Lake mode, so there is no imported copy to refresh. rpt_case_management has two pages, Service overview and Data quality.
+The semantic model: Episodes in the middle with its six dimensions, and two standalone tables for data quality and the reporting date.
 
-### Orchestration
+### The report
 
-pl_load_extract runs one extract end to end. nb_resolve_extract picks the oldest landed extract with no successful run, then the pipeline runs Bronze, Silver and Gold and writes one row to `ops.run_log`. When a step fails, the pipeline logs the failure and a Fail activity marks the run Failed, so monitoring never shows a false success. Only one run goes at a time. A daily schedule exists but is switched off, because I pause the capacity when I am not working on it.
+The report has two pages. Service overview, the screenshot at the top, covers the provider's everyday questions: how many people are in treatment, how long they wait for triage, how many leave with a planned completion, and which substances bring them in. Data quality covers the question under all of those, whether the figures can be trusted. For each extract it shows how many rows were loaded, fixed, removed and quarantined, and when the last good load ran. I put that page in the report itself so that anyone reading the first page can check the second. Some visuals still need work, and the open flaws are listed under [Limitations](#limitations-and-what-i-would-do-next).
+
+![Power BI data quality page with a table per extract, a chart of quarantined rows and the last successful load time](docs/images/11-report-data-quality.png)
+
+The Data quality page. Fixed, removed and quarantined match the generator's answer key for every extract.
+
+### Orchestration and failures
+
+One pipeline, pl_load_extract, runs a whole extract. A schedule passes no parameters, so its first step, nb_resolve_extract, works out what to load: the oldest landed extract with no successful run in the run log. Bronze, Silver and Gold then load in order, and the last step writes a row to ops.run_log with the status and row counts. When a step fails, the pipeline logs the failure and then a Fail activity marks the whole run as Failed. Without it, Fabric marks a run Succeeded when a failure branch has handled the error, and I wanted a failed load to look failed. The broken extract shows it working: it fails the column check before anything is written, and because only a successful run counts as loaded, it is tried again on the next run instead of being skipped.
+
+![Fabric pipeline canvas for pl_load_extract: set run id, resolve extract, an If Condition that runs the load steps, and a failure branch that logs then fails](docs/images/02-orchestration-pipeline.png)
+
+pl_load_extract. The boxed branch logs a failure, then fails the run.
+
+![Monitor run history for pl_load_extract with six successful runs and two failed runs for the broken extract](docs/images/03-pipeline-run-history.png)
+
+Runs on the morning of 25 November 2026. Both failures are the broken extract 2026-11-22.
+
+![Error message naming the extract, file and missing column](docs/images/04-broken-extract-fails-schema-check.png)
+
+The broken extract stops at the column check: interventions.csv has no end_date, so nothing was written. This run predates the Load Gold step.
+
+![Run log table listing twelve runs with their status and failed step](docs/images/08-run-log.png)
+
+ops.run_log, one row per run. Nothing to load is a run with no new extract waiting.
 
 ### Public data
 
 pl_load_public_data downloads three official files: the English Indices of Deprivation 2025, ONS deaths related to drug poisoning by local authority, and the ONS district to region lookup. It loads them through Bronze and Silver into `reference` schemas and builds `lh_gold.dbo.dim_local_authority`, one row per English district, which joins to `dim_service` on the district code. It is not in the semantic model or the report yet. The public data strand (M5) is built but not reviewed by me.
 
 Every design choice, with the alternatives and the reason, is in [docs/decisions.md](docs/decisions.md). Column by column mappings are in [docs/source-to-target.md](docs/source-to-target.md).
-
-## What Gold answers
-
-All six as of 15 November 2026. How each one is measured is in [docs/decisions.md](docs/decisions.md#how-each-question-is-measured).
-
-1. How many people are in treatment now? 582: Leeds 154, Blackpool 115, Cornwall 90, Middlesbrough 87, Brighton and Hove 73, Lewisham 63. In treatment means an episode with no discharge date.
-2. How many new referrals come in each month, and from where? 2,683 over 44 months, April 2023 to November 2026. Self-referral 1,198, criminal justice 533, GP 415, other health or social care 317, and family, friend or carer 220. November 2026 only runs to the 15th and has 85.
-3. How long do people wait from referral to triage? The median is 13 days at every service. 76.5% of the 2,600 triaged episodes (1,989) were seen within 21 days, from 72.8% at Cornwall to 80.0% at Blackpool. 83 episodes are not triaged yet, so they have no wait.
-4. What share of discharges are planned completions? 48.2%, or 1,012 of 2,101. Leeds 51.0%, Cornwall 50.0%, Lewisham 49.1%, Middlesbrough 47.4%, Blackpool 44.9%, Brighton and Hove 44.1%.
-5. What is the primary substance at referral? Alcohol 971 (36.2%), opiates 791 (29.5%), cannabis 297 (11.1%), crack cocaine 252 (9.4%), powder cocaine 246 (9.2%) and other drugs 126 (4.7%).
-6. Can the figures be trusted? Each extract's rows, as Silver handled them:
-
-   | Extract | Rows loaded | Values fixed | Rows removed | Rows quarantined |
-   |---|---|---|---|---|
-   | 2026-10-25 | 13,959 | 95 | 110 | 107 |
-   | 2026-11-01 | 274 | 5 | 4 | 5 |
-   | 2026-11-08 | 268 | 5 | 4 | 5 |
-   | 2026-11-15 | 265 | 5 | 4 | 5 |
-   | Total | 14,766 | 110 | 122 | 122 |
-
-   Rows loaded counts the four extract files. The last successful load was on 25 November 2026 at 06:40 UTC.
-
-## Screenshots
-
-![Fabric pipeline canvas for pl_load_extract: set run id, resolve extract, an If Condition that runs the load steps, and a failure branch that logs then fails](docs/images/02-orchestration-pipeline.png)
-
-pl_load_extract picks the oldest extract not yet loaded, then runs Bronze, Silver and Gold in order. When a step fails, the pipeline logs the failure, then a Fail activity marks the run as Failed (boxed).
-
-![Monitor run history for pl_load_extract with six successful runs and two failed runs for the broken extract](docs/images/03-pipeline-run-history.png)
-
-Runs of pl_load_extract on the morning of 25 November 2026. The two failures are the broken extract 2026-11-22, which fails each time it is tried rather than being skipped.
-
-![Error message naming the extract, file and missing column](docs/images/04-broken-extract-fails-schema-check.png)
-
-The broken extract fails the schema check before anything is written: interventions.csv is missing end_date. This run is from before Load Gold was added to the pipeline.
-
-![Run log table listing twelve runs with their status and failed step](docs/images/08-run-log.png)
-
-ops.run_log has one row per pipeline run, with the extract, timings, status and the step that failed (boxed). The broken extract 2026-11-22 fails at Load Bronze every time it is tried. Nothing to load is a run with no new extract waiting.
-
-![Semantic model diagram with the Episodes fact table joined to six dimension tables, plus two standalone tables](docs/images/09-gold-semantic-model.png)
-
-The Gold star schema as the semantic model sees it. Episodes joins to six dimensions: client, service, date, substance, referral source and discharge reason. Extract Loads and Report Settings stand alone and feed the data quality page and the reporting date.
-
-![Power BI data quality page with a table per extract, a chart of quarantined rows and the last successful load time](docs/images/11-report-data-quality.png)
-
-Rows loaded, quarantined, fixed and removed for each extract, copied into Gold from the dq tables in Silver, with the time of the last successful load. The 122 quarantined rows match the quarantine table above.
 
 ## SQL checks
 
