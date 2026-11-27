@@ -132,6 +132,17 @@ Runs by extract and status: the broken extract failed all four times, and the re
 
 The last stage, pl_load_public_data, adds real context. It downloads three official datasets: the English Indices of Deprivation 2025, ONS figures for deaths related to drug poisoning by local authority, and the ONS lookup of districts and regions. They go through the same layers and end up in one Gold table, dim_local_authority, with a row for every English district. It joins to the services on the district code, so each fictional service can sit next to real figures for the area it serves. I recorded each source's licence before downloading anything, and each landed file keeps its sha256 fingerprint, so if a publisher swaps the file the next load stops instead of quietly taking it. The table is not in the semantic model or the report yet. The public data strand (M5) is built but not reviewed by me.
 
+## Design decisions
+
+The [decisions log](docs/decisions.md) has all 39 decisions, each with the alternatives I turned down. These six shaped the project most.
+
+- One lakehouse per layer, so a Silver or Gold notebook cannot change Bronze by mistake.
+- Bronze stores every column as text, so bad values survive long enough for Silver to catch them.
+- Silver fixes a value only when there is one right answer and quarantines the rest with a reason, so nothing in Silver is a guess.
+- The Silver MERGE only takes a newer last_modified_at, so a rerun or a late, older extract cannot replace newer data.
+- Each failed step is logged and then fails the pipeline, because a handled failure otherwise shows as Succeeded.
+- The reporting date is the latest extract's cut-off, not today, so the same data always gives the same answers.
+
 ## How to run it
 
 I ran it with Python 3.10 on my machine and an F2 Fabric capacity.
