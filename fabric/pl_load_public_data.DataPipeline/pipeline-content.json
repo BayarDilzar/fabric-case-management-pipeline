@@ -1,0 +1,91 @@
+{
+  "properties": {
+    "description": "Lands the public reference files and loads them into Bronze, Silver and Gold. Run by hand only.",
+    "activities": [
+      {
+        "type": "TridentNotebook",
+        "typeProperties": {
+          "notebookId": "9a098b68-9fe7-a973-41a7-fc25c256bc0a",
+          "workspaceId": "00000000-0000-0000-0000-000000000000",
+          "parameters": {}
+        },
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30
+        },
+        "name": "Land public data",
+        "dependsOn": []
+      },
+      {
+        "type": "Fail",
+        "typeProperties": {
+          "message": {
+            "value": "@activity('Land public data').error.message",
+            "type": "Expression"
+          },
+          "errorCode": "LandpublicdataFailed"
+        },
+        "name": "Fail after Land public data",
+        "dependsOn": [
+          {
+            "activity": "Land public data",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "TridentNotebook",
+        "typeProperties": {
+          "notebookId": "bee19469-d94e-a631-447e-e5784a4d2f0e",
+          "workspaceId": "00000000-0000-0000-0000-000000000000",
+          "parameters": {
+            "landed": {
+              "value": {
+                "value": "@activity('Land public data').output.result.exitValue",
+                "type": "Expression"
+              },
+              "type": "string"
+            }
+          }
+        },
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30
+        },
+        "name": "Load public data",
+        "dependsOn": [
+          {
+            "activity": "Land public data",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ]
+      },
+      {
+        "type": "Fail",
+        "typeProperties": {
+          "message": {
+            "value": "@activity('Load public data').error.message",
+            "type": "Expression"
+          },
+          "errorCode": "LoadpublicdataFailed"
+        },
+        "name": "Fail after Load public data",
+        "dependsOn": [
+          {
+            "activity": "Load public data",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ]
+      }
+    ],
+    "concurrency": 1
+  }
+}

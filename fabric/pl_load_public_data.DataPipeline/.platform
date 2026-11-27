@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "DataPipeline",
+    "displayName": "pl_load_public_data",
+    "description": "Lands the public reference files and loads them into Bronze, Silver and Gold. Run by hand only."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "2708020c-7d90-91eb-4c7b-1bfaf7e6d3eb"
+  }
+}
