@@ -85,7 +85,7 @@ A Bronze column name is the header with any `[note n]` removed, in lower case, w
 
 ## How to rerun
 
-Run pl_load_public_data by hand. It has no parameters and no schedule. The steps and checks are in docs/runbook.md.
+Run pl_load_public_data by hand. It has no parameters and no schedule. The steps and checks are in the [runbook](runbook.md#load-the-public-data).
 
 - A rerun downloads each file again and compares it with the file landed for that release. If they are the same, Landing is left alone, and Bronze, Silver and Gold are rebuilt with the same row counts. Two runs on 26 November 2026 gave the same counts in all seven tables.
 - If a publisher now serves a different file, the run stops at Land public data with both sha256 values, and nothing is written. This is expected for the ONS file after its next release, because its link points at "current".

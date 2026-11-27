@@ -16,13 +16,13 @@ Each entry records the decision, the alternatives considered and the reason.
 
 ## One lakehouse per layer
 
-- **Decision:** Each medallion layer has its own lakehouse: lh_bronze now, lh_silver and lh_gold later. The lh_ prefix matches the nb_ and pl_ prefixes of notebooks and pipelines.
+- **Decision:** Each medallion layer has its own lakehouse: lh_bronze, lh_silver and lh_gold. The lh_ prefix matches the nb_ and pl_ prefixes of notebooks and pipelines.
 - **Alternatives:** One lakehouse with a schema per layer.
 - **Reason:** A Silver or Gold notebook writes to its own attached lakehouse, so a mistake there cannot change Bronze.
 
 ## Lakehouse schemas on
 
-- **Decision:** lh_bronze has lakehouse schemas turned on, and Bronze tables go in the dbo schema. lh_silver and lh_gold will also have schemas on.
+- **Decision:** lh_bronze has lakehouse schemas turned on, and Bronze tables go in the dbo schema. lh_silver and lh_gold also have schemas on.
 - **Alternatives:** Recreate lh_bronze with schemas off. Schemas cannot be turned off on an existing lakehouse.
 - **Reason:** It was created with schemas on. It is kept because it is the current Fabric default, costs nothing for this project, and recreating it would add work for no gain. The two documented limits, direct sharing of the lakehouse and external tables over ADLS, do not affect this project.
 
@@ -179,14 +179,14 @@ Each entry records the decision, the alternatives considered and the reason.
 ## Direct Lake semantic model
 
 - **Decision:** sm_case_management reads the lh_gold Delta tables in Direct Lake mode through one OneLake connection. It has nine tables with business names, six single-direction relationships from Episodes, hidden keys, and one or two measures per question. It was written as TMDL and deployed through the Fabric REST API.
-- **Alternatives:** Import mode with a scheduled refresh. DirectQuery against the SQL endpoint. Building it with the Power BI modeling server.
-- **Reason:** Direct Lake reads the Delta files themselves, so there is no copy of Gold to refresh: a refresh only points the model at the latest table versions, and took about 3 seconds. Import would hold a second copy and need its own schedule. The modeling server needs its licence terms accepted for the user, so the model was written as TMDL instead. Its files reach fabric/ when the model is committed from Source control.
+- **Alternatives:** Import mode with a scheduled refresh. DirectQuery against the SQL endpoint.
+- **Reason:** Direct Lake reads the Delta files themselves, so there is no copy of Gold to refresh: a refresh only points the model at the latest table versions, and took about 3 seconds. Import would hold a second copy and need its own schedule. Its files reach fabric/ when the model is committed from Source control.
 
-## Report built by hand from a guide
+## Report built in the browser
 
-- **Decision:** The two-page report, Service overview and Data quality, is built in the browser on sm_case_management, following a written click-by-click guide.
-- **Alternatives:** Writing the report files through the report skill.
-- **Reason:** The report skill writes and checks report files with its powerbi-report-author tool, which is not installed here, and it does not guess the file format without it. Every figure on the report comes from a measure already checked against its view, so building by hand adds no risk to the numbers.
+- **Decision:** The two-page report, Service overview and Data quality, is built in the Power BI editor in the browser, on sm_case_management.
+- **Alternatives:** Writing the PBIR report files directly and publishing them through the Fabric API.
+- **Reason:** I had no tool here to validate PBIR files before publishing them, and the browser editor always writes valid ones. Every figure on the report comes from a measure already checked against its view, so building it in the browser adds no risk to the numbers.
 
 ## Public data loaded with notebooks, not Dataflow Gen2
 
@@ -226,7 +226,7 @@ Each entry records the decision, the alternatives considered and the reason.
 
 ## Bronze column names made from the headers
 
-- **Decision:** Each public Bronze column is named from its header: any `[note n]` removed, lower case, and each run of other characters turned into one underscore. The run stops if two headers give the same name. The exact headers are listed in docs/public-data.md.
+- **Decision:** Each public Bronze column is named from its header: any `[note n]` removed, lower case, and each run of other characters turned into one underscore. The run stops if two headers give the same name. The exact headers are listed in [public-data.md](public-data.md#columns-used).
 - **Alternatives:** Delta column mapping, which keeps the headers as they are. Names typed in by hand.
 - **Reason:** The headers hold spaces, commas, brackets and line breaks, which a Delta column name cannot hold without column mapping. With column mapping every query would have to quote names with line breaks in them. A fixed rule gives the same names on every run and needs no change when ONS adds a period.
 
