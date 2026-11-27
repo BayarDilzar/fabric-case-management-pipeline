@@ -1,27 +1,34 @@
-# fabric-case-management-pipeline
+# Treatment case management pipeline in Microsoft Fabric
 
-I built this Microsoft Fabric pipeline to take weekly extracts from a made-up drug and alcohol treatment case management system through Bronze, Silver and Gold lakehouses into a Power BI report. The data is synthetic, made by a Python generator I designed, and the data model is my own design, not any real provider's.
+I built a data pipeline in Microsoft Fabric for a fictional drug and alcohol treatment provider. Each week it takes the export from the provider's case management system, checks and cleans every row, and feeds a Power BI report on caseload, waiting times and data quality. The data is synthetic, with errors planted in it on purpose, and the project shows that every error is caught and every row is accounted for.
 
-The treatment strand (M1 to M4) is built, run and checked in my own Fabric workspace. The public data strand (M5) is built but not reviewed by me.
+![Power BI service overview page with three headline cards and four charts](docs/images/10-report-service-overview.png)
 
-I built it in five stages, and the docs refer to them:
+The report's first page: 582 people in treatment, a 13 day median wait to triage and 76.5% seen within 21 days, all from synthetic data.
 
-- M1: the extract generator and Bronze
-- M2: Silver and the data quality checks
-- M3: weekly incremental loads, the run log and failure handling
-- M4: Gold, the reporting views, the semantic model and the report
-- M5: public data by local authority
+## At a glance
 
-## How it fits together
+- 354 of 354 planted errors handled the way the answer key says: 312 in the historical extract and 14 in each of the three weekly ones. Each was fixed, removed as a duplicate or quarantined, and none went missing.
+- Every load reconciles, which means the rows that come in equal the rows that go out, table by table.
+- Loading the same week a second time changes nothing. The rerun inserted 0 rows and updated 0.
+- A broken extract with a missing column fails before anything is written, every time it is tried, and is never skipped.
+- People in treatment for each service on the report match a separate SQL query over the data.
+- 101 automated tests check the data generator and the SQL view files.
+
+## How the data flows
+
+The pipeline follows the medallion pattern: data moves through three layers, Bronze, Silver and Gold, and gets cleaner at each one.
 
 ```mermaid
 flowchart LR
-    gen["Python generator<br>synthetic CSV extracts"] --> land["Landing<br>lh_bronze Files"]
-    land --> bronze["Bronze<br>lh_bronze, all text"]
-    bronze --> silver["Silver<br>lh_silver, typed and checked"]
-    silver --> gold["Gold<br>lh_gold, star schema"]
+    gen["Python generator<br>synthetic CSV extracts"] --> land["Landing<br>files in lh_bronze"]
+    land --> bronze["Bronze<br>raw, all text"]
+    bronze --> silver["Silver<br>cleaned and checked"]
+    silver --> dq["dq schema<br>quarantined rows and load counts"]
+    silver --> gold["Gold<br>star schema"]
+    dq --> gold
     gold --> model["Semantic model<br>Direct Lake"]
-    model --> report["Power BI report<br>two pages"]
+    model --> report["Power BI report"]
 ```
 
 ### Generator
@@ -63,22 +70,6 @@ pl_load_extract runs one extract end to end. nb_resolve_extract picks the oldest
 pl_load_public_data downloads three official files: the English Indices of Deprivation 2025, ONS deaths related to drug poisoning by local authority, and the ONS district to region lookup. It loads them through Bronze and Silver into `reference` schemas and builds `lh_gold.dbo.dim_local_authority`, one row per English district, which joins to `dim_service` on the district code. It is not in the semantic model or the report yet. The public data strand (M5) is built but not reviewed by me.
 
 Every design choice, with the alternatives and the reason, is in [docs/decisions.md](docs/decisions.md). Column by column mappings are in [docs/source-to-target.md](docs/source-to-target.md).
-
-## Results
-
-Everything here comes from the synthetic data, as of 15 November 2026, the cut-off of the latest loaded extract. The figures show the pipeline works. They say nothing about any real service.
-
-| What I checked | Result |
-|---|---|
-| Planted defects in the historical extract | 312 of 312 caught, each by the rule meant for it. No clean row rejected and no clean value changed |
-| Planted defects in each weekly extract | 14 of 14 caught in each of the three |
-| Reconciliation | Balances for every table in every run |
-| Rerun of 2026-11-08 after 2026-11-15 | 0 rows inserted, 0 updated, 259 unchanged. Silver got no new Delta version |
-| Broken extract 2026-11-22 | Failed at Load Bronze on all four attempts and was never skipped. Nothing was written |
-| Silver after four extracts, against an independent Python model | Every row matches: 2,090 clients, 2,683 episodes, 4,171 interventions and 5,296 reviews |
-| The six report questions, worked out again in plain Python from the CSV files | 0 differences from the views |
-| Each DAX measure against its view | 60 checks, 0 differences |
-| Unit tests | 101 pass |
 
 ## What Gold answers
 
@@ -138,10 +129,6 @@ ops.run_log has one row per pipeline run, with the extract, timings, status and 
 ![Semantic model diagram with the Episodes fact table joined to six dimension tables, plus two standalone tables](docs/images/09-gold-semantic-model.png)
 
 The Gold star schema as the semantic model sees it. Episodes joins to six dimensions: client, service, date, substance, referral source and discharge reason. Extract Loads and Report Settings stand alone and feed the data quality page and the reporting date.
-
-![Power BI service overview page with three headline cards and four charts](docs/images/10-report-service-overview.png)
-
-582 people in treatment, a 13 day median wait to triage and 76.5% seen within 21 days, with caseload by service, planned completions, and referrals by substance and by month.
 
 ![Power BI data quality page with a table per extract, a chart of quarantined rows and the last successful load time](docs/images/11-report-data-quality.png)
 
