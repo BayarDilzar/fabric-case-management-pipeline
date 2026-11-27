@@ -63,3 +63,102 @@ pl_load_extract runs one extract end to end. nb_resolve_extract picks the oldest
 pl_load_public_data downloads three official files: the English Indices of Deprivation 2025, ONS deaths related to drug poisoning by local authority, and the ONS district to region lookup. It loads them through Bronze and Silver into `reference` schemas and builds `lh_gold.dbo.dim_local_authority`, one row per English district, which joins to `dim_service` on the district code. It is not in the semantic model or the report yet. The public data strand (M5) is built but not reviewed by me.
 
 Every design choice, with the alternatives and the reason, is in [docs/decisions.md](docs/decisions.md). Column by column mappings are in [docs/source-to-target.md](docs/source-to-target.md).
+
+## Results
+
+Everything here comes from the synthetic data, as of 15 November 2026, the cut-off of the latest loaded extract. The figures show the pipeline works. They say nothing about any real service.
+
+| What I checked | Result |
+|---|---|
+| Planted defects in the historical extract | 312 of 312 caught, each by the rule meant for it. No clean row rejected and no clean value changed |
+| Planted defects in each weekly extract | 14 of 14 caught in each of the three |
+| Reconciliation | Balances for every table in every run |
+| Rerun of 2026-11-08 after 2026-11-15 | 0 rows inserted, 0 updated, 259 unchanged. Silver got no new Delta version |
+| Broken extract 2026-11-22 | Failed at Load Bronze on all four attempts and was never skipped. Nothing was written |
+| Silver after four extracts, against an independent Python model | Every row matches: 2,090 clients, 2,683 episodes, 4,171 interventions and 5,296 reviews |
+| The six report questions, worked out again in plain Python from the CSV files | 0 differences from the views |
+| Each DAX measure against its view | 60 checks, 0 differences |
+| Unit tests | 101 pass |
+
+## What Gold answers
+
+All six as of 15 November 2026. How each one is measured is in [docs/decisions.md](docs/decisions.md#how-each-question-is-measured).
+
+1. How many people are in treatment now? 582: Leeds 154, Blackpool 115, Cornwall 90, Middlesbrough 87, Brighton and Hove 73, Lewisham 63. In treatment means an episode with no discharge date.
+2. How many new referrals come in each month, and from where? 2,683 over 44 months, April 2023 to November 2026. Self-referral 1,198, criminal justice 533, GP 415, other health or social care 317, and family, friend or carer 220. November 2026 only runs to the 15th and has 85.
+3. How long do people wait from referral to triage? The median is 13 days at every service. 76.5% of the 2,600 triaged episodes (1,989) were seen within 21 days, from 72.8% at Cornwall to 80.0% at Blackpool. 83 episodes are not triaged yet, so they have no wait.
+4. What share of discharges are planned completions? 48.2%, or 1,012 of 2,101. Leeds 51.0%, Cornwall 50.0%, Lewisham 49.1%, Middlesbrough 47.4%, Blackpool 44.9%, Brighton and Hove 44.1%.
+5. What is the primary substance at referral? Alcohol 971 (36.2%), opiates 791 (29.5%), cannabis 297 (11.1%), crack cocaine 252 (9.4%), powder cocaine 246 (9.2%) and other drugs 126 (4.7%).
+6. Can the figures be trusted? Each extract's rows, as Silver handled them:
+
+   | Extract | Rows loaded | Values fixed | Rows removed | Rows quarantined |
+   |---|---|---|---|---|
+   | 2026-10-25 | 13,959 | 95 | 110 | 107 |
+   | 2026-11-01 | 274 | 5 | 4 | 5 |
+   | 2026-11-08 | 268 | 5 | 4 | 5 |
+   | 2026-11-15 | 265 | 5 | 4 | 5 |
+   | Total | 14,766 | 110 | 122 | 122 |
+
+   Rows loaded counts the four extract files. The last successful load was on 25 November 2026 at 06:40 UTC.
+
+## Screenshots
+
+![Bronze clients table in Fabric with every source column typed as text and three load columns](docs/images/01-bronze-tables-loaded-as-text.png)
+
+Bronze keeps each extract exactly as it arrived. Every source column is text, so bad values survive for the Silver checks, and three load columns record the extract, the source file and the load time.
+
+![Fabric pipeline canvas for pl_load_extract: set run id, resolve extract, an If Condition that runs the load steps, and a failure branch that logs then fails](docs/images/02-orchestration-pipeline.png)
+
+pl_load_extract picks the oldest extract not yet loaded, then runs Bronze, Silver and Gold in order. When a step fails, the pipeline logs the failure, then a Fail activity marks the run as Failed (boxed).
+
+![Monitor run history for pl_load_extract with six successful runs and two failed runs for the broken extract](docs/images/03-pipeline-run-history.png)
+
+Runs of pl_load_extract on the morning of 25 November 2026. The two failures are the broken extract 2026-11-22, which fails each time it is tried rather than being skipped.
+
+![Error message naming the extract, file and missing column](docs/images/04-broken-extract-fails-schema-check.png)
+
+The broken extract fails the schema check before anything is written: interventions.csv is missing end_date. This run is from before Load Gold was added to the pipeline.
+
+![Silver clients table with typed columns, and the dq schema holding quarantine, reconciliation and rule_results](docs/images/05-silver-typed-tables-and-dq-schema.png)
+
+Silver is typed: birth_year is a number and last_modified_at a timestamp. The data quality tables sit in their own dq schema.
+
+![Quarantine table listing rejected rows with rule ids, reasons and the original row](docs/images/06-dq-quarantine-with-reasons.png)
+
+122 rejected rows across four extracts, each kept with the rule it broke, a plain English reason and the original Bronze row.
+
+![Reconciliation table with inserted, updated and unchanged counts per extract](docs/images/07-dq-reconciliation-by-extract.png)
+
+Every extract reconciles: Bronze rows = inserted + updated + unchanged + duplicates removed + quarantined. The boxed rows are 2026-11-08 loaded once, then rerun. The rerun inserts and updates nothing.
+
+![Run log table listing twelve runs with their status and failed step](docs/images/08-run-log.png)
+
+ops.run_log has one row per pipeline run, with the extract, timings, status and the step that failed (boxed). The broken extract 2026-11-22 fails at Load Bronze every time it is tried. Nothing to load is a run with no new extract waiting.
+
+![Semantic model diagram with the Episodes fact table joined to six dimension tables, plus two standalone tables](docs/images/09-gold-semantic-model.png)
+
+The Gold star schema as the semantic model sees it. Episodes joins to six dimensions: client, service, date, substance, referral source and discharge reason. Extract Loads and Report Settings stand alone and feed the data quality page and the reporting date.
+
+![Power BI service overview page with three headline cards and four charts](docs/images/10-report-service-overview.png)
+
+582 people in treatment, a 13 day median wait to triage and 76.5% seen within 21 days, with caseload by service, planned completions, and referrals by substance and by month.
+
+![Power BI data quality page with a table per extract, a chart of quarantined rows and the last successful load time](docs/images/11-report-data-quality.png)
+
+Rows loaded, quarantined, fixed and removed for each extract, copied into Gold from the dq tables in Silver, with the time of the last successful load. The 122 quarantined rows match the quarantine table above.
+
+## SQL checks
+
+I checked the pipeline from the tables themselves with five Spark SQL queries in the nb_sql_checks notebook. Each one proves something different.
+
+1. [Duplicates in Bronze](docs/images/13-sql-duplicates-in-bronze.png). 20 client ids arrive twice in the historical extract, which matches the 20 duplicates Silver removed from clients. So Bronze keeps what arrived, and the removing happens in Silver.
+2. Every load reconciles (below). For each of the seven runs, Bronze rows equal inserted + updated + unchanged + duplicates removed + quarantined, reruns included. So no row was lost or counted twice. These totals include the services and code list files, so each is 31 rows higher than Rows loaded above.
+3. [Quarantine by rule](docs/images/15-sql-quarantine-by-rule.png). The 122 quarantined rows fall into 12 groups of rule ids, so every held-back row says which rule it broke. One row can break more than one rule.
+4. [Run history by status](docs/images/16-sql-run-history-by-status.png). 2026-11-22 failed on all four attempts, 2026-11-08 succeeded twice and 2026-11-15 three times. So a broken extract is retried, not skipped, and a rerun succeeds.
+5. Gold matches the report (below). People in treatment by service from a join of fact_episode and dim_service gives 154, 115, 90, 87, 73 and 63, the same as the report.
+
+![Notebook cell with a Spark SQL query showing balances for every pipeline run](docs/images/14-sql-every-load-reconciles.png)
+
+![Notebook cell with a Spark SQL join returning people in treatment for six services](docs/images/17-sql-gold-join-matches-report.png)
+
+The tests in `tests/` check the generator: the same seed gives the same bytes, and the manifest lists exactly the defects that a separate detector finds in the files, for five seeds. A test also checks that each file in `sql/reporting/` creates the view it is named after.
