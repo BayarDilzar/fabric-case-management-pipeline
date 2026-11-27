@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "nb_load_public_data",
+    "description": "Loads the landed public reference files into Bronze, Silver and Gold, and fails on any row count or code check."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "bee19469-d94e-a631-447e-e5784a4d2f0e"
+  }
+}
