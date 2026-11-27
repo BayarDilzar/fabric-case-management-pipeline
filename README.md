@@ -152,91 +152,47 @@ The tests in `tests/` check the generator: the same seed gives the same bytes, a
 
 ## How to run it
 
-What is where:
+I ran it with Python 3.10 on my machine and an F2 Fabric capacity.
+
+```
+py -3 -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+.venv\Scripts\python -m extract_generator --seed 2026 --out output
+.venv\Scripts\python -m pytest
+```
+
+Then connect a Fabric workspace to this repo with Git integration, using the `fabric/` folder, and update it from Git. A tenant admin has to allow syncing with GitHub first. I have only run it in my own workspace, so in a new one each notebook may need its default lakehouse attached again. Upload `output/` into `Files/landing/` in lh_bronze, keeping the folder names, and run pl_load_extract with `extract_id` empty once per extract. The fifth run reaches the broken extract and fails, as it should. `python sql/deploy_views.py <workspace name>` deploys the reporting views after `az login`, and pl_load_public_data loads the public data. The [runbook](docs/runbook.md) has the checks, reruns and recovery steps.
+
+## Limitations and what I would do next
+
+The data is synthetic, so nothing here is a finding about a real provider. I upload the extracts manually, and a run takes 9 to 10 minutes on F2. The daily schedule is switched off because I pause the capacity between sessions, so every run so far was started manually. If a run stops halfway, some tables are updated and others not until the next run repeats the extract, which is safe. In the public data, Barnsley and Sheffield have no drug poisoning figures, because the ONS file uses their newer district codes and they are not remapped. The [public data notes](docs/public-data.md#limits) list the rest.
+
+The report has five open flaws, all visible in its definition in `fabric/` and in the screenshots:
+
+- Planned Completion (%) has no service on its axis, so it shows one bar for all services (48.2%), not one per service.
+- The wait to triage appears only as two cards for all services together. The figures for each service are in Gold and in the views, but not on the page.
+- Referrals per month is one line with no split by referral source, and its last point, November 2026, only runs to the 15th without saying so.
+- The visual titles are the default field names, such as "# People in Treatment by Service", not plain titles.
+- The Last Successful Load card shows 25 Nov 2026 06:40 with no time zone. The time is UTC.
+
+Next I would fix those flaws, review the public data and add dim_local_authority to the semantic model, and promote the items to a test workspace with a deployment pipeline. I would also log public data runs in ops.run_log; for now their row counts only live in the pipeline run history.
+
+## Data sources and licences
+
+The treatment data is synthetic and the six services are fictional, though their districts are real: Middlesbrough, Blackpool, Brighton and Hove, Cornwall, Leeds and Lewisham. The fields, code lists and data model are my own design, not any provider's or a national dataset's. I used the public NDTMS Core Dataset documents as a guide to concepts only.
+
+The public data is three files under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/): the English indices of deprivation 2025, File 10 version 2, from the Ministry of Housing, Communities and Local Government; deaths related to drug poisoning by local authority, England and Wales, registrations up to 2025, from ONS; and the Local Authority District to Region (December 2024) Lookup in EN from the ONS Open Geography Portal. Contains public sector information licensed under the Open Government Licence v3.0. Source: Office for National Statistics licensed under the Open Government Licence v.3.0. Page and file links, columns and file fingerprints are in [docs/public-data.md](docs/public-data.md).
+
+The code is under the [MIT licence](LICENSE).
+
+## Repo layout
 
 | Folder | What it holds |
 |---|---|
-| `extract_generator/` | The Python generator that writes the synthetic extracts |
+| `extract_generator/` | The synthetic data generator |
 | `tests/` | Tests for the generator and the view files |
-| `fabric/` | The Fabric items, as Fabric Git integration writes them: lakehouses, notebooks, pipelines, the semantic model and the report |
-| `sql/` | The reporting views and the script that deploys them |
-| `docs/` | Decisions, mappings, the runbook and the public data sources |
-
-1. Make the extracts on your own machine. I used Python 3.10.
-
-   ```
-   py -3 -m venv .venv
-   .venv\Scripts\python -m pip install -r requirements-dev.txt
-   .venv\Scripts\python -m extract_generator --seed 2026 --out output
-   .venv\Scripts\python -m pytest
-   ```
-
-   The generator takes about two seconds and writes to `output/`, which git ignores.
-
-2. Create a Fabric workspace on a capacity. I used an F2 capacity, paid as you go, and paused it whenever I stopped. Connect the workspace to this repo with Fabric Git integration, using the `fabric/` folder, and update the workspace from Git. A tenant admin has to turn on the setting that lets users sync workspace items with GitHub. I have only run this in my own workspace. Each notebook stores its default lakehouse as an ID in `fabric/`, so in a new workspace you may need to attach each notebook to its lakehouse again.
-
-3. Upload the contents of `output/` to `Files/landing/` in lh_bronze, keeping the folder names (`reference/`, `extracts/<date>/` and `manifests/<date>/`). I used the OneLake API from a small script that is not in this repo. Any upload that keeps the paths works.
-
-4. Run pl_load_extract with `extract_id` left empty. Each run loads the next extract, so four runs load the historical extract and the three weekly ones. A fifth run reaches the broken extract 2026-11-22 and fails, which is what it should do. A run takes 9 to 10 minutes on F2.
-
-5. Deploy the reporting views with `python sql/deploy_views.py <workspace name>`, after `az login`.
-
-6. Run pl_load_public_data to load the public data. It has no parameters.
-
-7. Pause the capacity.
-
-The [runbook](docs/runbook.md) has the checks after each run, how to rerun one extract and how to recover from a failed run.
-
-## Data and licences
-
-The treatment data is synthetic. No row describes a real person, and the six services are fictional, although their districts are real: Middlesbrough, Blackpool, Brighton and Hove, Cornwall, Leeds and Lewisham. I designed the fields and code lists myself, and used the public NDTMS Core Dataset documents as a guide to concepts only. The data model, from the extracts to the Gold star, is my own design, not any provider's or a national dataset's.
-
-The public data strand loads three files, all under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/):
-
-| Source | Publisher | Edition |
-|---|---|---|
-| English indices of deprivation 2025, File 10: Local Authority District summaries, lower tier | Ministry of Housing, Communities and Local Government | Version 2, 17 November 2025 |
-| Deaths related to drug poisoning by local authority, England and Wales | Office for National Statistics | Deaths registered up to 2025, released 4 November 2026 |
-| Local Authority District to Region (December 2024) Lookup in EN | Office for National Statistics, Open Geography Portal | December 2024 |
-
-Contains public sector information licensed under the Open Government Licence v3.0. Source: Office for National Statistics licensed under the Open Government Licence v.3.0.
-
-Page and file links, the exact columns used, and the sha256 of each landed file are in [docs/public-data.md](docs/public-data.md).
-
-The code is under the MIT licence. See [LICENSE](LICENSE).
-
-## Known limitations
-
-- The data is synthetic and its shares are made up to look plausible. No figure here is a finding about a real provider.
-- I upload the extracts by hand. A real source system would drop them into Landing itself.
-- A run of pl_load_extract takes 9 to 10 minutes on F2, mostly because each notebook step starts its own Spark session.
-- The schedule is switched off, so every run so far was started by hand. Fabric is reported to log scheduled runs with the trigger type Manual too, and I could not test that.
-- A run that fails halfway leaves some tables updated until the next run, which repeats the extract safely. If the capacity stops mid-run, no run log row is written, but the resolver still repeats the extract.
-- A child row whose parent was quarantined in an earlier extract is quarantined as an orphan, not as "parent quarantined". The test data never does this.
-- Values fixed counts rows per fix rule, not values, so a row with two codes fixed by the same rule counts once. The test data has one defect per row, so the figures here are exact.
-- The weekly files cannot show a deleted record.
-- The public data strand (M5) is built but not reviewed by me. Barnsley and Sheffield have no drug poisoning figures in Gold, because the ONS file uses their 2025 district codes and I did not remap them. Its other limits are in [docs/public-data.md](docs/public-data.md#limits).
-
-The report has open flaws, which I can see in its definition in `fabric/` and in the screenshots above:
-
-- Planned Completion (%) has no service on its axis, so it shows one bar for all services (48.2%), not the share for each service.
-- The wait to triage is only on two cards for all services together. The median and share for each service are in Gold and in the views, but not on the page.
-- Referrals per month is one line with no split by referral source. Its last point, November 2026, covers only up to the 15th, and the chart does not say so.
-- The visual titles are the default field names, such as "# People in Treatment by Service", not plain titles.
-- The Last Successful Load card shows 25 Nov 2026 06:40 without a time zone. The time is UTC.
-
-## What I would do next
-
-- Fix the report flaws above.
-- Review the public data strand, then add dim_local_authority to the semantic model so each service sits next to its district's figures.
-- Promote the items to a test workspace with a deployment pipeline and run the load there. I planned this as a sixth stage and did not build it.
-- Write a run log row for public data runs as well. For now their row counts are only in the pipeline run history.
-
-## Docs
-
-- [Decisions log](docs/decisions.md): every design choice, the alternatives and the reason.
-- [Source to target](docs/source-to-target.md): each column from Bronze to Silver to Gold.
-- [Runbook](docs/runbook.md): loading, rerunning and recovering.
-- [Public data](docs/public-data.md): sources, licences, lineage and limits.
+| `fabric/` | The Fabric items as Git integration saves them: lakehouses, notebooks, pipelines, the semantic model and the report |
+| `sql/` | The six reporting views and the script that deploys them |
+| `docs/` | The [decisions log](docs/decisions.md), [source to target mapping](docs/source-to-target.md), [runbook](docs/runbook.md), [public data notes](docs/public-data.md) and the screenshots |
 
 Author: Bayar Dilzar
