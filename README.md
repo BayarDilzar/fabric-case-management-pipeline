@@ -8,7 +8,7 @@ The Service overview page, all synthetic data.
 
 ## At a glance
 
-- 354 errors were planted across four extracts: 312 in the historical one and 14 in each weekly one. In every extract the dq tables count the same fixes, removals and quarantines as the answer key.
+- 354 errors were planted across four extracts: 312 in the historical one and 14 in each weekly one. In every extract the dq tables count the same fixes, removals and quarantines as the answer key. The [defect results](docs/defect-results.md) set them side by side.
 - Every load reconciles, table by table, or the run fails.
 - Loading the same week twice inserts and updates nothing.
 - An extract with a missing column fails before anything's written. It's retried on the next run, never skipped.
