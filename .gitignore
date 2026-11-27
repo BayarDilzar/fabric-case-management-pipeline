@@ -217,7 +217,3 @@ __marimo__/
 .streamlit/secrets.toml
 
 output/
-
-# Private working notes stay out of the public repo.
-notes/
-notes-private/
