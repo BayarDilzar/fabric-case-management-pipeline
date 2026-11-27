@@ -187,3 +187,51 @@ Each entry records the decision, the alternatives considered and the reason.
 - **Decision:** The two-page report, Service overview and Data quality, is built in the browser on sm_case_management, following a written click-by-click guide.
 - **Alternatives:** Writing the report files through the report skill.
 - **Reason:** The report skill writes and checks report files with its powerbi-report-author tool, which is not installed here, and it does not guess the file format without it. Every figure on the report comes from a measure already checked against its view, so building by hand adds no risk to the numbers.
+
+## Public data loaded with notebooks, not Dataflow Gen2
+
+- **Decision:** Two notebooks load the public data: nb_land_public_data downloads the files and nb_load_public_data loads them to Bronze, Silver and Gold. Dataflow Gen2 is not used for now. A Dataflow could be added by hand later.
+- **Alternatives:** A Dataflow Gen2 for the lookup and the deprivation file, as first planned, with a notebook for the ONS file.
+- **Reason:** One tool then handles all three files, and the notebooks are created, run and checked through the Fabric API like every other step in this project. The ONS workbook needs code in any case: the latest period is found from its headers, and its markers are checked. The downloads worked from inside Fabric for all three sources, so no file was landed from this machine.
+
+## A separate manual pipeline for public data
+
+- **Decision:** pl_load_public_data runs nb_land_public_data and then nb_load_public_data, each with a Fail activity on failure. It has no parameters and no schedule, and runs one at a time.
+- **Alternatives:** Adding the two steps to pl_load_extract. A yearly schedule.
+- **Reason:** The public data changes once a year; the extracts arrive every week. Inside pl_load_extract the files would be downloaded every week for nothing, and a publisher's site being down would fail the treatment load. A yearly schedule would need an end date and a running capacity on the day. Runs are not written to ops.run_log, because that table describes extract loads and the resolver reads it. The load notebook's exit value, kept in the pipeline run history, holds each run's row counts.
+
+## Public data in reference schemas
+
+- **Decision:** The Bronze and Silver public tables sit in a reference schema in lh_bronze and lh_silver. The one Gold table, dim_local_authority, sits in lh_gold.dbo next to dim_service.
+- **Alternatives:** The dbo schema in every lakehouse. A separate lakehouse for public data.
+- **Reason:** The demo tables in dbo, dq and ops stay untouched, and the schema shows which tables hold public reference data rather than extracts. Gold keeps all its tables in dbo, so the new dimension sits with the star it joins. Before creating it I read the live nb_load_gold: it rebuilds only its nine named tables with CREATE OR REPLACE and drops nothing, so its full rebuild leaves dim_local_authority alone.
+
+## All drug poisoning deaths, not drug misuse
+
+- **Decision:** The deaths figures come from Table 3 of the ONS workbook: all drug poisoning, persons, for the latest three year period, 2023 to 2025.
+- **Alternatives:** Table 6, the headline drug misuse measure, which the earlier M5 plan named. Both tables.
+- **Reason:** The M5 design names the source, the Silver table and the Gold fields as drug poisoning deaths, and Table 3 is that measure. ONS note 2 says "misuse is a subset", so the two cannot be added, and loading both would double the columns for one comparison. Table 6 has the same layout as Table 3, so changing to it means changing only the sheet name in nb_load_public_data.
+
+## District codes are not remapped
+
+- **Decision:** Every table keeps the district codes its publisher gives. dim_local_authority has one row per district in the December 2024 lookup, which matches IoD 2025 code for code. The ONS file gives Barnsley and Sheffield their 2025 codes, E08000038 and E08000039, so in Gold those two districts have no drug poisoning figures.
+- **Alternatives:** A two-row mapping from the 2025 codes to E08000016 and E08000019, as the earlier M5 plan proposed. The April 2025 lookup, which would move the gap to the deprivation figures instead.
+- **Reason:** A mapping would assume each area is the same under both codes, and I found no ONS statement of why the codes changed. Empty figures show the gap, where a mapping would hide it. None of the six service districts is affected. nb_load_public_data stops the run if the IoD codes and the lookup codes ever differ, and its exit value lists every district without drug poisoning figures.
+
+## Landing checked against the file already landed
+
+- **Decision:** Each public source has a release folder in Landing. nb_land_public_data downloads every file and compares its sha256 with the file already landed for that release. Any difference stops the run before anything is written. A file is written only when nothing is landed at its path yet.
+- **Alternatives:** A sha256 for each release written into the notebook. Overwriting the landed file on every run.
+- **Reason:** The landed file is its own record, so there is no second copy of the sha256 to keep in step. Overwriting would let the ONS "current" link replace the 2025 edition without anyone noticing. Tested in a Livy session with the deprivation release pointed at a different file: the run stopped and named both sha256 values, and the landed file kept its sha256 and its modified time.
+
+## Bronze column names made from the headers
+
+- **Decision:** Each public Bronze column is named from its header: any `[note n]` removed, lower case, and each run of other characters turned into one underscore. The run stops if two headers give the same name. The exact headers are listed in docs/public-data.md.
+- **Alternatives:** Delta column mapping, which keeps the headers as they are. Names typed in by hand.
+- **Reason:** The headers hold spaces, commas, brackets and line breaks, which a Delta column name cannot hold without column mapping. With column mapping every query would have to quote names with line breaks in them. A fixed rule gives the same names on every run and needs no change when ONS adds a period.
+
+## Suppressed rates stored as null with the ONS marker
+
+- **Decision:** Where ONS gives `[x]` instead of a rate, Silver stores null for the rate and both confidence limits, and rate_marker holds `[x]`. A rate marked `[u]` is kept, with rate_marker `[u]`. A deaths count or rate that cannot be read, or any other marker, stops the run.
+- **Alternatives:** 0 for a suppressed rate. Two true or false flag columns.
+- **Reason:** 0 would read as no deaths, when Rutland, for one, had 8. The marker is ONS's own shorthand, so a reader can look it up in the ONS notes, and one column covers both cases. In the 2023 to 2025 figures 7 districts have `[x]` and 48 have `[u]`.

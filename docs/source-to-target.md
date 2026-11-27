@@ -86,3 +86,54 @@ Silver is lh_silver.dbo, with dq and ops in lh_silver. Gold is lh_gold.dbo. nb_l
 | dq.rule_results.rows_failed where action is fixed | fact_extract_load.values_fixed | bigint | Sum for that run |
 | dq.reconciliation.duplicates_removed | fact_extract_load.rows_removed | bigint | Sum over the four source tables for that run |
 | dq.reconciliation.quarantined | fact_extract_load.rows_quarantined | bigint | Sum over the four source tables for that run |
+
+## Public data: Landing to Bronze
+
+nb_load_public_data reads each landed file in lh_bronze Files/public and replaces its table in lh_bronze.reference. Every column of the source sheet is kept as text, named from its header as described in docs/decisions.md. The exact headers are listed in docs/public-data.md. An empty cell is stored as null. Each table also gets these columns.
+
+| Source | Bronze column | Target type | Transformation |
+|---|---|---|---|
+| Landed file path | _source_file | string | For example Files/public/deprivation_lad/2025-11-17/File_10_-_IoD2025_Local_Authority_District_Summaries__lower-tier__v2.xlsx |
+| Publisher's file URL | _source_url | string | Copied from nb_land_public_data |
+| Release folder | _source_release | string | For example 2025-11-17 |
+| Landed file | _sha256 | string | sha256 of the file, checked against the one nb_land_public_data landed |
+| none | _loaded_at | timestamp | Time of the load, UTC |
+
+## Public data: Bronze to Silver
+
+Bronze is lh_bronze.reference and Silver is lh_silver.reference. Silver is replaced on every run, after its checks pass.
+
+| Bronze table and column | Silver table and column | Target type | Transformation |
+|---|---|---|---|
+| local_authority.lad24cd | local_authority.local_authority_code | string | Trimmed. Must be an English district code (E06, E07, E08 or E09) and appear once |
+| local_authority.lad24nm | local_authority.local_authority_name | string | Trimmed |
+| local_authority.rgn24cd | local_authority.region_code | string | Trimmed |
+| local_authority.rgn24nm | local_authority.region_name | string | Trimmed |
+| deprivation_lad.local_authority_district_code_2024 | deprivation_lad.local_authority_code | string | Trimmed. Must be an English district code and appear once. The set of codes must equal the lookup's |
+| deprivation_lad.local_authority_district_name_2024 | deprivation_lad.local_authority_name | string | Trimmed |
+| deprivation_lad.imd_rank_of_average_score | deprivation_lad.imd_rank_of_average_score | int | Read as a whole number. 1 is the most deprived district |
+| deprivation_lad.imd_proportion_of_lsoas_in_most_deprived_10_nationally | deprivation_lad.imd_proportion_lsoas_most_deprived_10pct | double | Read as a number. A fraction, so 0.5 means half the district's LSOAs |
+| drug_poisoning_deaths_lad.area_codes | drug_poisoning_deaths_lad.local_authority_code | string | Trimmed. Only rows with an English district code are kept, each once |
+| drug_poisoning_deaths_lad.local_authority_district, county_or_unitary_authority | drug_poisoning_deaths_lad.local_authority_name | string | The district column, or the unitary authority column when that is empty. Trimmed |
+| Bronze column names | drug_poisoning_deaths_lad.period | string | The latest three year period in the headers, written 2023 to 2025 |
+| drug_poisoning_deaths_lad.2023_to_2025_number_of_deaths | drug_poisoning_deaths_lad.deaths | int | Read as a whole number. Must be readable |
+| drug_poisoning_deaths_lad.2023_to_2025_rate_per_100_000 | drug_poisoning_deaths_lad.age_standardised_rate_per_100000 | double | Read as a number. Null when ONS gives [x] |
+| drug_poisoning_deaths_lad.2023_to_2025_lcl | drug_poisoning_deaths_lad.rate_lower_95_ci | double | Read as a number. Null when ONS gives [x] |
+| drug_poisoning_deaths_lad.2023_to_2025_ucl | drug_poisoning_deaths_lad.rate_upper_95_ci | double | Read as a number. Null when ONS gives [x] |
+| drug_poisoning_deaths_lad.2023_to_2025_rate_per_100_000, 2023_to_2025_marker | drug_poisoning_deaths_lad.rate_marker | string | [x] when the rate is [x], otherwise the marker, [u] or empty. Any other value stops the run |
+
+## Public data: Silver to Gold
+
+Silver is lh_silver.reference and Gold is lh_gold.dbo. nb_load_public_data replaces dim_local_authority on every run. nb_load_gold does not touch it.
+
+| Silver table and column | Gold table and column | Target type | Transformation |
+|---|---|---|---|
+| local_authority.local_authority_code, local_authority_name, region_code, region_name | dim_local_authority, the same column names | string | Copied. One row per district in the lookup |
+| deprivation_lad.imd_rank_of_average_score | dim_local_authority.imd_rank_of_average_score | int | Joined on local_authority_code |
+| deprivation_lad.imd_proportion_lsoas_most_deprived_10pct | dim_local_authority.imd_proportion_lsoas_most_deprived_10pct | double | Joined on local_authority_code |
+| drug_poisoning_deaths_lad.period | dim_local_authority.drug_poisoning_period | string | Joined on local_authority_code. Empty when the deaths file has no row under the lookup's code, as for Barnsley and Sheffield |
+| drug_poisoning_deaths_lad.deaths | dim_local_authority.drug_poisoning_deaths | int | Joined on local_authority_code |
+| drug_poisoning_deaths_lad.age_standardised_rate_per_100000 | dim_local_authority.drug_poisoning_rate_per_100000 | double | Joined on local_authority_code |
+| drug_poisoning_deaths_lad.rate_lower_95_ci | dim_local_authority.drug_poisoning_rate_lower_95_ci | double | Joined on local_authority_code |
+| drug_poisoning_deaths_lad.rate_upper_95_ci | dim_local_authority.drug_poisoning_rate_upper_95_ci | double | Joined on local_authority_code |
+| drug_poisoning_deaths_lad.rate_marker | dim_local_authority.drug_poisoning_rate_marker | string | Joined on local_authority_code |

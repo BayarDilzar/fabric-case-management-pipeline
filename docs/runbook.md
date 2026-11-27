@@ -47,3 +47,24 @@
 3. Run `python sql/deploy_views.py <workspace name>`. It deploys every file in `sql/reporting/` to the lh_gold SQL analytics endpoint.
 4. Check the last line lists the six views in the reporting schema.
 5. After changing a .sql file, run step 3 again. Each file replaces its view.
+
+## Load the public data
+
+pl_load_public_data lands the three public files and loads them to Bronze, Silver and Gold. The files change once a year, so it runs by hand only. docs/public-data.md describes the sources.
+
+1. Resume the capacity if it is paused.
+2. Open pl_load_public_data and select Run. It has no parameters.
+3. Wait for the run to finish in Monitor. A run takes 2 to 5 minutes.
+4. Check that Land public data and Load public data both show Succeeded.
+5. Open the output of Load public data. Its exit value gives the row counts: 296, 358 and 296 in the three Bronze tables, 296 in each Silver table, and 296 in dim_local_authority. It also lists the districts without drug poisoning figures, which should be Barnsley and Sheffield only.
+6. Open the lh_gold SQL analytics endpoint and open dbo.dim_local_authority. Check it has 296 rows, and that each local_authority_code in dbo.dim_service has a row with a deprivation rank and a death count.
+7. Pause the capacity if you are stopping.
+
+## Recover from a failed public data run
+
+1. Open the failed run in Monitor and read the error of the failed activity.
+2. If Land public data failed with "is landed with sha256", the publisher now serves a different file for that release. Nothing was written. Follow How to rerun in docs/public-data.md before loading the new file.
+3. If Land public data failed with "did not return an Excel file" or a network error, the site was down or sent an error page. Run the pipeline again later.
+4. If Load public data failed, the message names the file or table and the check. "should hold the headers" means the publisher changed the layout. "has no row for service district codes" means a source no longer covers a service district; do not remap the code, look at the source first.
+5. Bronze is replaced before the Silver checks run. Silver and Gold are written only after their own checks pass, so after a failed Silver check both keep the tables from the last good run.
+6. Fix the cause and run pl_load_public_data again.
