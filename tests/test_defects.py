@@ -236,3 +236,20 @@ def test_week_two_resends_five_reviews_exactly_as_silver_already_holds_them(seed
         assert row == before["reviews"][line["record_key"]]
     for week in ("2026-11-01", "2026-11-15"):
         assert not [line for line in defect_lines(out, week) if line["defect_type"] == "RESENT_UNCHANGED"]
+
+
+def test_seed_2026_plants_354_row_defects_across_the_four_good_extracts(output_for):
+    # The counts docs/defect-results.md and the README quote. Re-sent rows and the missing column are not row defects.
+    out = output_for(2026)
+    outcomes = {week: Counter(line["expected_outcome"] for line in defect_lines(out, week)) for week in extract_dates(out)}
+    row_defects = {week: counts["CORRECTED"] + counts["REMOVED"] + counts["QUARANTINED"] for week, counts in outcomes.items()}
+
+    assert outcomes == {
+        "2026-10-25": {"CORRECTED": 95, "REMOVED": 110, "QUARANTINED": 107},
+        "2026-11-01": {"CORRECTED": 5, "REMOVED": 4, "QUARANTINED": 5},
+        "2026-11-08": {"CORRECTED": 5, "REMOVED": 4, "QUARANTINED": 5, "UNCHANGED": 5},
+        "2026-11-15": {"CORRECTED": 5, "REMOVED": 4, "QUARANTINED": 5},
+        "2026-11-22": {"LOAD_FAILED": 1},
+    }
+    assert row_defects == {"2026-10-25": 312, "2026-11-01": 14, "2026-11-08": 14, "2026-11-15": 14, "2026-11-22": 0}
+    assert sum(row_defects.values()) == 354
