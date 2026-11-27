@@ -1,0 +1,12 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Notebook",
+    "displayName": "nb_land_public_data",
+    "description": "Downloads the three public reference files into lh_bronze Files/public and checks each file's sha256 against the copy already landed for its release."
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "9a098b68-9fe7-a973-41a7-fc25c256bc0a"
+  }
+}
